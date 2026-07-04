@@ -1,0 +1,11 @@
+# Render deployment blueprint.
+# When you connect this repo on render.com, Render reads this file
+# and configures everything automatically — no manual settings needed.
+services:
+  - type: web
+    name: flyer-app
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    # The server reads process.env.PORT, which Render sets for you.

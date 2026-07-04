@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(python3 -m http.server 8642)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(kill 17342)",
+      "Bash(npm --version)"
+    ]
+  }
+}

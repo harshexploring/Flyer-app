@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Flyer — Chidiya Udd</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="logo">🪽 Flyer</div>
+    <div class="nav-right">
+      <span class="pill" id="score-pill">Word 0</span>
+      <span class="pill pill-gold" id="best-pill">Best 0</span>
+      <button class="icon-btn" id="mute-btn" aria-label="Toggle sound">🔊</button>
+    </div>
+  </nav>
+
+  <main class="stage" id="stage">
+
+    <!-- Multiplayer: who's in, alive (green) or out (red) -->
+    <div class="players-strip hidden" id="players-strip"></div>
+    <div class="spectator-banner hidden" id="spectator-banner">💥 You're out! Watching the others…</div>
+
+    <!-- Sky -->
+    <div class="sky">
+      <div class="sun"></div>
+      <div class="cloud cloud-1"></div>
+      <div class="cloud cloud-2"></div>
+      <div class="cloud cloud-3"></div>
+    </div>
+
+    <!-- Ground -->
+    <div class="ground">
+      <div class="hill hill-1"></div>
+      <div class="hill hill-2"></div>
+    </div>
+
+    <!-- The word -->
+    <div class="word-card" id="word-card">Bird</div>
+
+    <!-- Controls -->
+    <section class="controls">
+      <div class="buttons">
+        <button class="btn-action btn-fly" id="fly-btn">
+          <svg viewBox="0 0 64 40" class="btn-icon" aria-hidden="true">
+            <path d="M32 30 C 26 14, 12 6, 2 10 C 8 16, 14 18, 20 22 C 14 22, 8 23, 4 26 C 10 29, 18 30, 24 29 C 27 29, 30 30, 32 32 C 34 30, 37 29, 40 29 C 46 30, 54 29, 60 26 C 56 23, 50 22, 44 22 C 50 18, 56 16, 62 10 C 52 6, 38 14, 32 30 Z" fill="currentColor"/>
+          </svg>
+          <span class="btn-label">FLY</span>
+          <span class="btn-key">↑</span>
+        </button>
+        <button class="btn-action btn-ground" id="ground-btn">
+          <svg viewBox="0 0 64 40" class="btn-icon" aria-hidden="true">
+            <path d="M32 38 L 14 18 L 24 18 L 24 2 L 40 2 L 40 18 L 50 18 Z" fill="currentColor"/>
+          </svg>
+          <span class="btn-label">GROUND</span>
+          <span class="btn-key">↓</span>
+        </button>
+      </div>
+      <div class="timer" id="timer">
+        <div class="timer-fill" id="timer-fill"></div>
+      </div>
+    </section>
+
+    <!-- Full-screen flash for right / wrong -->
+    <div class="flash" id="flash"></div>
+
+    <!-- Start screen -->
+    <div class="overlay" id="start-screen">
+      <div class="panel">
+        <h1 class="panel-title">🪽 Flyer</h1>
+        <p class="panel-sub">chidiya udd… tota udd… ✨</p>
+        <div class="how-to">
+          <div class="how-row"><span class="how-emoji">🦅</span> If it can fly — hit <b>FLY</b> <span class="key-chip">↑</span></div>
+          <div class="how-row"><span class="how-emoji">🐘</span> If it can't — hit <b>GROUND</b> <span class="key-chip">↓</span></div>
+          <div class="how-row"><span class="how-emoji">⏱️</span> Be quick! The timer keeps shrinking…</div>
+          <div class="how-row"><span class="how-emoji">💥</span> One mistake and you're out!</div>
+        </div>
+        <div class="start-buttons">
+          <button class="btn-big" id="play-btn">Play Solo</button>
+          <button class="btn-big btn-friends" id="friends-btn">Play with Friends</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Name prompt (multiplayer) -->
+    <div class="overlay hidden" id="name-screen">
+      <div class="panel">
+        <h1 class="panel-title">🙋 Your name?</h1>
+        <p class="panel-sub">so friends know who they beat</p>
+        <input class="text-input" id="name-input" maxlength="16" placeholder="e.g. Harsh" autocomplete="off" />
+        <button class="btn-big" id="name-ok-btn">Continue</button>
+      </div>
+    </div>
+
+    <!-- Lobby (multiplayer) -->
+    <div class="overlay hidden" id="lobby-screen">
+      <div class="panel" id="lobby-panel"></div>
+    </div>
+
+    <!-- Final report (multiplayer) -->
+    <div class="overlay hidden" id="report-screen">
+      <div class="panel panel-wide" id="report-panel"></div>
+    </div>
+
+    <!-- Game over screen -->
+    <div class="overlay hidden" id="gameover-screen">
+      <div class="panel">
+        <h1 class="panel-title">💥 Udd gaya!</h1>
+        <p class="panel-sub" id="killer-line"></p>
+        <div class="stats">
+          <div class="stat"><span class="stat-num" id="stat-survived">0</span><span class="stat-label">words survived</span></div>
+          <div class="stat"><span class="stat-num" id="stat-avg">–</span><span class="stat-label">avg reaction</span></div>
+          <div class="stat"><span class="stat-num" id="stat-fastest">–</span><span class="stat-label">fastest</span></div>
+        </div>
+        <p class="highscore-line hidden" id="new-best">🎉 New best score!</p>
+        <button class="btn-big" id="replay-btn">Play again</button>
+      </div>
+    </div>
+
+  </main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
