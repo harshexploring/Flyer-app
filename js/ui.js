@@ -13,7 +13,7 @@ export function init() {
     'fly-btn', 'ground-btn', 'mute-btn',
     'score-pill', 'best-pill',
     'start-screen', 'gameover-screen', 'play-btn', 'replay-btn',
-    'killer-line', 'stat-survived', 'stat-avg', 'stat-fastest', 'new-best',
+    'killer-line', 'stat-survived', 'stat-avg', 'stat-fastest', 'new-best', 'home-btn',
     'friends-btn', 'name-screen', 'name-input', 'name-ok-btn',
     'lobby-screen', 'lobby-panel', 'report-screen', 'report-panel',
     'players-strip', 'spectator-banner',
@@ -263,9 +263,45 @@ export function promptName() {
   });
 }
 
+// Create-or-join chooser. Resolves with {mode:'create'},
+// {mode:'join', code} or {mode:'back'}.
+export function promptRoomChoice({ error = '' } = {}) {
+  hideScreens();
+  els.lobbyPanel.innerHTML = `
+    <h1 class="panel-title">👥 Play with Friends</h1>
+    ${error
+      ? `<p class="mp-error">${esc(error)}</p>`
+      : '<p class="panel-sub">start a room, or join your friend’s</p>'}
+    <button class="btn-big" id="create-room-btn">Create a room</button>
+    <div class="join-divider">— or join with a code —</div>
+    <input class="text-input code-input" id="join-code-input" maxlength="6"
+           placeholder="ABC123" autocomplete="off" autocapitalize="characters" />
+    <button class="btn-big btn-friends" id="join-room-btn">Join</button>
+    <p style="margin-top:14px"><button class="btn-small" id="choice-back-btn">Back</button></p>
+  `;
+  els.lobbyScreen.classList.remove('hidden');
+
+  return new Promise((resolve) => {
+    const input = document.getElementById('join-code-input');
+    const done = (value) => { els.lobbyScreen.classList.add('hidden'); resolve(value); };
+    const tryJoin = () => {
+      const code = input.value.trim().toUpperCase();
+      if (code.length !== 6) { input.classList.add('input-error'); input.focus(); return; }
+      done({ mode: 'join', code });
+    };
+    input.addEventListener('input', () => {
+      input.classList.remove('input-error');
+      input.value = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryJoin(); e.stopPropagation(); });
+    document.getElementById('create-room-btn').addEventListener('click', () => done({ mode: 'create' }));
+    document.getElementById('join-room-btn').addEventListener('click', tryJoin);
+    document.getElementById('choice-back-btn').addEventListener('click', () => done({ mode: 'back' }));
+  });
+}
+
 export function showLobby({ code, players, myId, maxPlayers, onStart, onLeave }) {
   hideScreens();
-  const link = `${location.origin}${location.pathname}?room=${code}`;
   const me = players.find((p) => p.id === myId);
   const isHost = !!me?.isHost;
 
@@ -273,8 +309,9 @@ export function showLobby({ code, players, myId, maxPlayers, onStart, onLeave })
     <h1 class="panel-title">🛖 Room</h1>
     <div class="lobby-code-row">
       <span class="lobby-code">${esc(code)}</span>
-      <button class="btn-small" id="copy-link-btn">Copy link</button>
+      <button class="btn-small" id="copy-code-btn">Copy code</button>
     </div>
+    <p class="lobby-hint">friends: open this site → Play with Friends → enter this code</p>
     <div class="lobby-players">
       ${players.map((p) => `
         <div class="lobby-player">
@@ -283,7 +320,7 @@ export function showLobby({ code, players, myId, maxPlayers, onStart, onLeave })
           ${p.isHost ? '<span class="host-badge">HOST</span>' : ''}
         </div>`).join('')}
     </div>
-    <p class="lobby-hint">${players.length}/${maxPlayers} players · share the link to invite</p>
+    <p class="lobby-hint">${players.length}/${maxPlayers} players</p>
     ${isHost
       ? '<button class="btn-big" id="lobby-start-btn">Start game</button>'
       : '<p class="lobby-hint">Waiting for the host to start…</p>'}
@@ -291,13 +328,13 @@ export function showLobby({ code, players, myId, maxPlayers, onStart, onLeave })
   `;
   els.lobbyScreen.classList.remove('hidden');
 
-  document.getElementById('copy-link-btn').addEventListener('click', async (e) => {
+  document.getElementById('copy-code-btn').addEventListener('click', async (e) => {
     try {
-      await navigator.clipboard.writeText(link);
+      await navigator.clipboard.writeText(code);
       e.target.textContent = 'Copied!';
-      setTimeout(() => { e.target.textContent = 'Copy link'; }, 1500);
+      setTimeout(() => { e.target.textContent = 'Copy code'; }, 1500);
     } catch {
-      prompt('Copy this link:', link);
+      prompt('Copy this code:', code);
     }
   });
   document.getElementById('lobby-start-btn')?.addEventListener('click', onStart);

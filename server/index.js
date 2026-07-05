@@ -26,13 +26,14 @@ const io = new Server(httpServer);
 const words = loadWords();
 const rooms = new Map(); // code → Room
 
-// Room codes avoid look-alike characters (0/O, 1/I/L).
+// 6-character room codes; the alphabet avoids look-alike
+// characters (0/O, 1/I/L) so codes are easy to read out loud.
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 function newRoomCode() {
   let code;
   do {
-    code = Array.from({ length: 4 }, () =>
+    code = Array.from({ length: 6 }, () =>
       CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)],
     ).join('');
   } while (rooms.has(code));
@@ -62,7 +63,7 @@ io.on('connection', (socket) => {
   socket.on('room:join', ({ code, name } = {}, ack) => {
     const room = rooms.get(String(code || '').trim().toUpperCase());
     if (!room) {
-      return ack?.({ ok: false, error: 'Room not found. Check the link or code.' });
+      return ack?.({ ok: false, error: 'Room not found. Check the code and try again.' });
     }
     if (room.phase === 'playing') {
       return ack?.({ ok: false, error: 'This game has already started — ask for a new round!' });
@@ -85,8 +86,17 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     if (!joinedCode) return;
-    rooms.get(joinedCode)?.removePlayer(socket.id);
-    cleanupRoom(joinedCode);
+    const room = rooms.get(joinedCode);
+    if (!room) return;
+    if (room.creatorId === socket.id) {
+      // The creator left → the room dies with them, and every
+      // remaining player is notified and sent back home.
+      room.close('The room creator left, so this room was closed.');
+      rooms.delete(joinedCode);
+    } else {
+      room.removePlayer(socket.id);
+      cleanupRoom(joinedCode);
+    }
   });
 });
 

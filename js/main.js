@@ -33,11 +33,11 @@ const hooks = {
 
     if (result.correct) {
       ui.flash('green');
-      sfx.correct();
       if (result.action === 'fly') {
-        sfx.whoosh();
+        sfx.correctFly();
         await ui.animateFlyUp();
       } else {
+        sfx.correct();
         sfx.thump();
         await ui.animateSettleDown();
       }
@@ -105,7 +105,7 @@ ui.init();
 ui.setBest(highscore);
 
 // Load the word list, then build the game and let the player start.
-(async () => {
+const booted = (async () => {
   try {
     const words = await loadWords();
     game = new Game(hooks, words);
@@ -115,16 +115,49 @@ ui.setBest(highscore);
   }
 })();
 
-// Opened via a shared room link (?room=CODE)? Go straight to
-// the multiplayer join flow.
-const roomCode = new URLSearchParams(location.search).get('room');
-if (roomCode) mp.startMultiplayer({ code: roomCode });
+// ---------------- Preloader ----------------
+// The scene loops every 2.5s (see .pre-scene CSS). Keep it up until
+// the page + words are ready AND at least MIN_ITERATIONS full loops
+// have played, then fade out at a loop boundary so the animation
+// never cuts mid-motion.
+const PRELOADER_ITERATION_MS = 2500;
+const PRELOADER_MIN_ITERATIONS = 2;
+const preloaderShownAt = performance.now();
+
+(async () => {
+  const el = document.getElementById('preloader');
+  if (!el) return;
+  const finish = () => {
+    el.classList.add('done');
+    setTimeout(() => el.remove(), 600);
+  };
+  const safety = setTimeout(finish, 15000); // never trap the user
+
+  await booted;
+  await new Promise((resolve) => {
+    if (document.readyState === 'complete') resolve();
+    else window.addEventListener('load', resolve, { once: true });
+  });
+
+  const elapsed = performance.now() - preloaderShownAt;
+  const loops = Math.max(PRELOADER_MIN_ITERATIONS, Math.ceil(elapsed / PRELOADER_ITERATION_MS));
+  setTimeout(() => { clearTimeout(safety); finish(); },
+    Math.max(0, loops * PRELOADER_ITERATION_MS - elapsed));
+})();
 
 // ---------------- Event wiring ----------------
 
 ui.els.playBtn.addEventListener('click', () => { sfx.click(); startGame(); });
 ui.els.replayBtn.addEventListener('click', () => { sfx.click(); startGame(); });
 ui.els.friendsBtn.addEventListener('click', () => { sfx.click(); mp.startMultiplayer(); });
+
+// Solo game-over → back to the landing screen (Play Solo / Friends).
+ui.els.homeBtn.addEventListener('click', () => {
+  sfx.click();
+  ui.hideWord();
+  ui.setScore(0);
+  ui.showStartScreen();
+});
 
 ui.els.flyBtn.addEventListener('pointerdown', () => answer('fly'));
 ui.els.groundBtn.addEventListener('pointerdown', () => answer('ground'));

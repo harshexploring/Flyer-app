@@ -68,8 +68,8 @@ function renderLobby() {
 
 // ---------------- Entry point ----------------
 
-// mode: create a room (no code) or join one (?room=CODE in the URL).
-export async function startMultiplayer({ code = null } = {}) {
+// Flow: name → create a room OR type a friend's 6-char room code.
+export async function startMultiplayer() {
   active = true;
   const name = await ui.promptName();
 
@@ -85,10 +85,25 @@ export async function startMultiplayer({ code = null } = {}) {
     bindEvents();
   }
 
-  const resp = await emitAck(code ? 'room:join' : 'room:create', { code, name });
-  if (!resp.ok) {
-    ui.showMpError(resp.error, { onBack: leave });
-    return;
+  // Keep offering the create/join screen until something works
+  // (a bad code shows the error inline and lets them retry).
+  let resp = null;
+  let error = '';
+  for (;;) {
+    const choice = await ui.promptRoomChoice({ error });
+    if (choice.mode === 'back') {
+      active = false;
+      socket.disconnect();
+      socket = null;
+      ui.showStartScreen();
+      return;
+    }
+    resp = await emitAck(
+      choice.mode === 'create' ? 'room:create' : 'room:join',
+      { code: choice.code, name },
+    );
+    if (resp.ok) break;
+    error = resp.error;
   }
 
   myId = socket.id;
@@ -185,6 +200,18 @@ function bindEvents() {
     });
   });
 
+  // The room creator left → the room is gone. Notify and send
+  // everyone back to the home screen.
+  socket.on('room:closed', ({ reason }) => {
+    screen = 'closed';
+    clearTimeout(localTimeoutTimer);
+    ui.stopTimer();
+    ui.hideWord();
+    ui.hidePlayersStrip();
+    ui.setButtonsEnabled(false);
+    ui.showMpError(reason || 'This room no longer exists.', { onBack: leave });
+  });
+
   socket.on('disconnect', () => {
     if (screen === 'playing' || screen === 'lobby') {
       ui.showMpError('Lost connection to the game server.', { onBack: leave });
@@ -211,11 +238,11 @@ export async function answer(action) {
 
   if (correct) {
     ui.flash('green');
-    sfx.correct();
     if (action === 'fly') {
-      sfx.whoosh();
+      sfx.correctFly();
       await ui.animateFlyUp();
     } else {
+      sfx.correct();
       sfx.thump();
       await ui.animateSettleDown();
     }

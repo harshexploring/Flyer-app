@@ -36,6 +36,7 @@ export class Room {
     this.io = io;
     this.code = code;
     this.words = words;
+    this.creatorId = null;    // the room dies when this player leaves
     this.players = new Map(); // id → player record
     this.phase = 'lobby';     // 'lobby' | 'playing' | 'over'
     this.round = 0;
@@ -77,6 +78,8 @@ export class Room {
   // ---------------- Lobby ----------------
 
   addPlayer(socket, rawName) {
+    const isCreator = this.connectedPlayers.length === 0;
+    if (isCreator) this.creatorId = socket.id;
     const name =
       String(rawName || '').trim().slice(0, 16) ||
       `Player ${this.players.size + 1}`;
@@ -84,7 +87,7 @@ export class Room {
       id: socket.id,
       socket,
       name,
-      isHost: this.connectedPlayers.length === 0,
+      isHost: isCreator,
       connected: true,
       alive: false,
       correctCount: 0,
@@ -97,6 +100,8 @@ export class Room {
     return player;
   }
 
+  // Removes a NON-creator player. (When the creator leaves, the
+  // whole room is closed instead — see close() and server/index.js.)
   removePlayer(id) {
     const player = this.players.get(id);
     if (!player) return;
@@ -114,15 +119,15 @@ export class Room {
       }
     } else {
       this.players.delete(id);
+      this.broadcastLobby();
     }
+  }
 
-    // Hand the host role to the next player if needed.
-    if (player.isHost) {
-      player.isHost = false;
-      const next = this.connectedPlayers[0];
-      if (next) next.isHost = true;
-    }
-    if (this.phase !== 'playing') this.broadcastLobby();
+  // The creator left: tell everyone and shut the room down. The
+  // server deletes the room right after, so the code stops working.
+  close(reason) {
+    this.emit('room:closed', { reason });
+    this.destroy();
   }
 
   get isEmpty() {

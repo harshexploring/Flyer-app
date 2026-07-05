@@ -21,8 +21,9 @@ export function isMuted() {
   return muted;
 }
 
-// One tone that can glide from `freq` to `freqTo`.
-function tone({ freq, freqTo = freq, duration, type = 'sine', gain = 0.15, delay = 0 }) {
+// One tone that can glide from `freq` to `freqTo`. A longer
+// `attack` makes the note fade in gently instead of clicking.
+function tone({ freq, freqTo = freq, duration, type = 'sine', gain = 0.15, delay = 0, attack = 0.012 }) {
   if (muted) return;
   const ac = audio();
   const t0 = ac.currentTime + delay;
@@ -34,7 +35,7 @@ function tone({ freq, freqTo = freq, duration, type = 'sine', gain = 0.15, delay
   osc.frequency.exponentialRampToValueAtTime(Math.max(freqTo, 1), t0 + duration);
 
   amp.gain.setValueAtTime(0, t0);
-  amp.gain.linearRampToValueAtTime(gain, t0 + 0.012);
+  amp.gain.linearRampToValueAtTime(gain, t0 + attack);
   amp.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
 
   osc.connect(amp).connect(ac.destination);
@@ -80,6 +81,14 @@ export const sfx = {
   correct() {
     tone({ freq: 523, duration: 0.12, type: 'triangle', gain: 0.18 });
     tone({ freq: 784, duration: 0.18, type: 'triangle', gain: 0.18, delay: 0.09 });
+  },
+
+  // Correct FLY: a soft, warm chime (pure sines, slow attack —
+  // gentler than the triangle chime + noisy whoosh it replaced).
+  correctFly() {
+    tone({ freq: 523.25, duration: 0.3, type: 'sine', gain: 0.1, attack: 0.05 });
+    tone({ freq: 659.25, duration: 0.36, type: 'sine', gain: 0.09, delay: 0.1, attack: 0.05 });
+    tone({ freq: 1046.5, duration: 0.45, type: 'sine', gain: 0.04, delay: 0.19, attack: 0.08 });
   },
 
   // The word soars into the sky.

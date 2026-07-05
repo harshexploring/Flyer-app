@@ -11,6 +11,22 @@
 </head>
 <body>
 
+  <!-- Preloader: a tiny "how the game works" scene. The bird flies
+       up, the elephant sits down. main.js hides it once the page has
+       loaded AND the animation has played at least 2 full loops. -->
+  <div class="preloader" id="preloader" aria-hidden="true">
+    <div class="pre-logo">🪽 Flyer</div>
+    <div class="pre-scene">
+      <div class="pre-char pre-bird">🐦</div>
+      <div class="pre-char pre-elephant">🐘</div>
+    </div>
+    <div class="pre-hints">
+      <span class="pre-hint pre-hint-fly">flies → up!</span>
+      <span class="pre-hint pre-hint-sit">sits → down!</span>
+    </div>
+    <div class="pre-credit">made with <span class="pre-heart">❤️</span> @Harsh Jha</div>
+  </div>
+
   <nav class="navbar">
     <div class="logo">🪽 Flyer</div>
     <div class="nav-right">
@@ -47,8 +63,14 @@
     <section class="controls">
       <div class="buttons">
         <button class="btn-action btn-fly" id="fly-btn">
-          <svg viewBox="0 0 64 40" class="btn-icon" aria-hidden="true">
-            <path d="M32 30 C 26 14, 12 6, 2 10 C 8 16, 14 18, 20 22 C 14 22, 8 23, 4 26 C 10 29, 18 30, 24 29 C 27 29, 30 30, 32 32 C 34 30, 37 29, 40 29 C 46 30, 54 29, 60 26 C 56 23, 50 22, 44 22 C 50 18, 56 16, 62 10 C 52 6, 38 14, 32 30 Z" fill="currentColor"/>
+          <svg viewBox="0 0 64 44" class="btn-icon" aria-hidden="true">
+            <!-- cute bird taking off -->
+            <path d="M28 21 Q 19 4 5 6 Q 11 15 23 23 Z" fill="rgba(255,255,255,0.85)"/>
+            <path d="M23 27 L 11 31 L 23 33 Z" fill="rgba(255,255,255,0.85)"/>
+            <ellipse cx="34" cy="27" rx="14" ry="9" fill="#ffffff"/>
+            <circle cx="47" cy="19" r="7" fill="#ffffff"/>
+            <path d="M53 17.5 L 61 20 L 53 22.5 Z" fill="#ffb340"/>
+            <circle cx="49" cy="18" r="1.7" fill="#3b3230"/>
           </svg>
           <span class="btn-label">FLY</span>
           <span class="btn-key">↑</span>
@@ -57,7 +79,7 @@
           <svg viewBox="0 0 64 40" class="btn-icon" aria-hidden="true">
             <path d="M32 38 L 14 18 L 24 18 L 24 2 L 40 2 L 40 18 L 50 18 Z" fill="currentColor"/>
           </svg>
-          <span class="btn-label">GROUND</span>
+          <span class="btn-label">SIT</span>
           <span class="btn-key">↓</span>
         </button>
       </div>
@@ -76,7 +98,7 @@
         <p class="panel-sub">chidiya udd… tota udd… ✨</p>
         <div class="how-to">
           <div class="how-row"><span class="how-emoji">🦅</span> If it can fly — hit <b>FLY</b> <span class="key-chip">↑</span></div>
-          <div class="how-row"><span class="how-emoji">🐘</span> If it can't — hit <b>GROUND</b> <span class="key-chip">↓</span></div>
+          <div class="how-row"><span class="how-emoji">🐘</span> If it can't — hit <b>SIT</b> <span class="key-chip">↓</span></div>
           <div class="how-row"><span class="how-emoji">⏱️</span> Be quick! The timer keeps shrinking…</div>
           <div class="how-row"><span class="how-emoji">💥</span> One mistake and you're out!</div>
         </div>
@@ -118,7 +140,10 @@
           <div class="stat"><span class="stat-num" id="stat-fastest">–</span><span class="stat-label">fastest</span></div>
         </div>
         <p class="highscore-line hidden" id="new-best">🎉 New best score!</p>
-        <button class="btn-big" id="replay-btn">Play again</button>
+        <div class="gameover-actions">
+          <button class="btn-big" id="replay-btn">Play again</button>
+          <button class="btn-small" id="home-btn">Back to Home</button>
+        </div>
       </div>
     </div>
 
