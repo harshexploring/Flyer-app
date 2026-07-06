@@ -1,24 +1,23 @@
 {
+
   "_comment": "Edit this file to control the game's words. No code needed. Keep every word UNAMBIGUOUS — the game tests reaction time, not trivia, so avoid tricky cases like penguin or ostrich. Add a word by typing it inside the right list. Try to keep the two lists roughly the same length so flying and non-flying words appear equally often.",
+  
   "fly": [
     "Bird", "Crow", "Sparrow", "Pigeon", "Parrot", "Eagle", "Owl", "Hawk",
     "Falcon", "Vulture", "Seagull", "Swan", "Duck", "Stork", "Flamingo",
     "Woodpecker", "Kingfisher", "Hummingbird", "Cuckoo", "Dove", "Pelican",
-    "Robin", "Magpie", "Goose", "Heron",
-    "Butterfly", "Bee", "Bumblebee", "Wasp", "Hornet", "Mosquito", "Housefly",
-    "Moth", "Dragonfly", "Firefly", "Bat",
-    "Airplane", "Helicopter", "Jet", "Rocket", "Drone", "Hot Air Balloon",
-    "Spaceship", "UFO", "Glider", "Kite", "Balloon",
-    "Fairy", "Dragon", "Angel"
+    "Robin", "Magpie", "Goose", "Heron","Butterfly", "Bee", "Bumblebee", "Wasp", "Hornet", "Mosquito", "Housefly",
+    "Moth", "Dragonfly", "Firefly", "Bat","Airplane", "Helicopter", "Jet", "Rocket", "Drone", "Hot Air Balloon",
+    "Spaceship", "UFO", "Glider", "Kite", "Balloon","Fairy", "Dragon", "Angel"
   ],
+
   "ground": [
     "Elephant","Narendra Modi", "Lion", "Tiger", "Cow", "Dog", "Cat", "Horse", "Goat",
     "Sheep", "Buffalo", "Monkey", "Donkey", "Pig", "Rabbit", "Deer", "Bear",
     "Fox", "Wolf", "Camel", "Giraffe", "Zebra", "Hippo", "Rhino", "Kangaroo",
-    "Squirrel",
-    "Snake", "Crocodile", "Tortoise", "Fish", "Frog", "Lizard", "Earthworm",
-    "Rat", "Snail", "Crab",
-    "Car", "Bus", "Truck", "Train", "Bicycle", "Boat", "Tractor",
+    "Squirrel","Snake", "Crocodile", "Tortoise", "Fish", "Frog", "Lizard", "Earthworm",
+    "Rat", "Snail", "Crab", "Car", "Bus", "Truck", "Train", "Bicycle", "Boat", "Tractor",
     "Table", "Chair", "House", "Tree", "Stone", "Book", "Shoe", "Fridge"
   ]
+
 }

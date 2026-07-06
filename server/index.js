@@ -21,7 +21,9 @@ const app = express();
 app.use(express.static(ROOT));
 
 const httpServer = createServer(app);
-const io = new Server(httpServer);
+// Open CORS so the mobile app (and any other origin) can connect —
+// the game has no credentials or private data to protect.
+const io = new Server(httpServer, { cors: { origin: '*' } });
 
 const words = loadWords();
 const rooms = new Map(); // code → Room
