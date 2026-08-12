@@ -6,6 +6,15 @@
       "runtimeExecutable": "/Users/harsh/tools/node/bin/node",
       "runtimeArgs": ["server/index.js"],
       "port": 8642
+    },
+    {
+      "name": "flyer-mobile-web",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd 'MobileApp/flyer-mobile' && PATH=\"$HOME/tools/node/bin:$PATH\" CI=1 npx expo start --web --port 8090"
+      ],
+      "port": 8090
     }
   ]
 }

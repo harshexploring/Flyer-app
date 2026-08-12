@@ -5,7 +5,12 @@
       "Bash(python3 -m http.server 8642)",
       "mcp__Claude_Preview__preview_start",
       "Bash(kill 17342)",
-      "Bash(npm --version)"
+      "Bash(npm --version)",
+      "Bash(echo '\\\\n# Node.js \\(installed at ~/tools/node\\)\\\\nexport PATH=\"$HOME/tools/node/bin:$PATH\"')",
+      "Read(//Users/harsh/**)",
+      "Bash(zsh -i -c 'which node npm && node --version && npm --version')",
+      "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./package.json'\\).scripts, null, 1\\)\\)\")",
+      "Bash(curl -s -m 5 -o /dev/null -w \"%{http_code}\" http://192.168.1.8:8642/)"
     ]
   }
 }
