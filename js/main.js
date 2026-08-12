@@ -13,7 +13,6 @@ const HIGHSCORE_KEY = 'flyer-highscore';
 
 let highscore = Number(localStorage.getItem(HIGHSCORE_KEY) || 0);
 let inputLocked = true; // true while animations run or no game is on
-let lastResult = null;  // remembered for the game-over screen
 let game = null;        // created once words.json has loaded
 
 const hooks = {
@@ -28,7 +27,6 @@ const hooks = {
 
   async onResult(result) {
     inputLocked = true;
-    lastResult = result;
     ui.stopTimer();
 
     if (result.correct) {
@@ -44,6 +42,8 @@ const hooks = {
       await ui.wait(120); // tiny breather between words
     } else {
       ui.flash('red');
+      ui.setLives(result.livesLeft); // fade the lost heart
+      ui.vibrate();                  // buzz the phone
       sfx.wrong();
       if (result.action === 'fly') {
         sfx.pop();
@@ -72,8 +72,7 @@ const hooks = {
     sfx.gameOver();
     ui.showGameOver({
       stats,
-      word: lastResult.word,
-      action: lastResult.action,
+      mistakes: game.mistakes, // every word that cost a life
       isNewBest,
     });
   },
@@ -84,6 +83,7 @@ function startGame() {
   ui.hideScreens();
   ui.hideWord();
   ui.setScore(0);
+  ui.showHearts(3);
   ui.setButtonsEnabled(true);
   sfx.start();
   setTimeout(() => game.start(), 450); // let the start jingle play
@@ -156,6 +156,7 @@ ui.els.homeBtn.addEventListener('click', () => {
   sfx.click();
   ui.hideWord();
   ui.setScore(0);
+  ui.hideHearts();
   ui.showStartScreen();
 });
 

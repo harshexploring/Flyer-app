@@ -30,6 +30,7 @@
   <nav class="navbar">
     <div class="logo">🪽 Flyer</div>
     <div class="nav-right">
+      <div class="hearts hidden" id="hearts" aria-label="Lives"></div>
       <span class="pill" id="score-pill">Word 0</span>
       <span class="pill pill-gold" id="best-pill">Best 0</span>
       <button class="icon-btn" id="mute-btn" aria-label="Toggle sound">🔊</button>
@@ -100,7 +101,7 @@
           <div class="how-row"><span class="how-emoji">🦅</span> If it can fly — hit <b>FLY</b> <span class="key-chip">↑</span></div>
           <div class="how-row"><span class="how-emoji">🐘</span> If it can't — hit <b>SIT</b> <span class="key-chip">↓</span></div>
           <div class="how-row"><span class="how-emoji">⏱️</span> Be quick! The timer keeps shrinking…</div>
-          <div class="how-row"><span class="how-emoji">💥</span> One mistake and you're out!</div>
+          <div class="how-row"><span class="how-emoji">❤️</span> You get 3 lives — last as long as you can!</div>
         </div>
         <div class="start-buttons">
           <button class="btn-big" id="play-btn">Play Solo</button>
@@ -132,8 +133,9 @@
     <!-- Game over screen -->
     <div class="overlay hidden" id="gameover-screen">
       <div class="panel">
-        <h1 class="panel-title"> Game Over! </h1>
-        <p class="panel-sub" id="killer-line"></p>
+        <h1 class="panel-title">😢 Game Over!</h1>
+        <p class="panel-sub reveal-heading">Here's what caught you out:</p>
+        <div class="reveal-row" id="reveal-row"></div>
         <div class="stats">
           <div class="stat"><span class="stat-num" id="stat-survived">0</span><span class="stat-label">words survived</span></div>
           <div class="stat"><span class="stat-num" id="stat-avg">–</span><span class="stat-label">avg reaction</span></div>

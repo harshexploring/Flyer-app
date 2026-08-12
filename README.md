@@ -39,16 +39,28 @@ python3 -m http.server 8000
 | Start / restart (solo) | Play | `Space` / `Enter` |
 | Mute | 🔊 in navbar | — |
 
-**Solo:** sudden death. Score = words survived + average/fastest reaction
-time. Best score is saved in the browser (localStorage). From the game-over
-screen you can play again or go back to the home screen.
+**Lives:** you get **3 lives** (three hearts in the navbar). A wrong or late
+answer costs one life and buzzes the phone (`navigator.vibrate`); the game
+ends on the third mistake. Applies to both solo and multiplayer.
+
+**Game-over pictures:** when you lose, **every** word that cost you a life
+(up to 3) is shown as a card. Each card cross-fades back and forth (~1s
+each) between a cartoon emoji and a real photo (fetched from Wikipedia),
+with a short explainer — e.g. "A camel can't fly." This is the moment to
+learn what each one looks like. Fictional characters show only the emoji
+(no copyrighted photo).
+
+**Solo:** last as long as you can. Score = words survived + average/fastest
+reaction time. Best score is saved in the browser (localStorage). From the
+game-over screen you can play again or go back to the home screen.
 
 **Multiplayer:** Play with Friends → enter your name → *Create a room* (you
 get a code like `Q428HZ`) or *join with a code*. The creator starts the
-game. Wrong or late answers eliminate you (your name turns red in the strip
-at the top; survivors stay green and show their reaction time each round).
-Eliminated players spectate. At the end, a report shows everyone's correct
-answers, average and fastest reaction times, and who won.
+game. Each player has 3 lives; the player strip at the top shows everyone's
+remaining hearts, and a name turns red when that player is out. Survivors
+show their reaction time each round; eliminated players spectate. At the
+end, a report shows everyone's stats, who won, and — for players who lost —
+photo cards of every word that knocked them out.
 
 **Room lifecycle:** a room lives only while its creator is in it. If the
 creator leaves — lobby or mid-game — the room is destroyed, its code stops
@@ -60,15 +72,16 @@ working, and every remaining player is notified and sent back home.
 | ---- | -------- |
 | `index.html` | Page structure: preloader, navbar, sky/ground stage, FLY & SIT buttons (the fly-bird icon SVG is inline here), timer bar, all overlay screens. |
 | `css/style.css` | All looks: preloader animation keyframes, sky/clouds/ground, button colors + hover/press states, player strip, lobby, report table. |
-| `words.json` | **The words.** Two lists: `"fly"` and `"ground"`. Edit this file to change the words — no code needed. Used by both solo and multiplayer. |
+| `words.json` | **The words.** Two lists: `"fly"` and `"ground"` (86 each). Edit this file to change the words — no code needed. A few very popular characters are mixed in (Superman flies, Pikachu doesn't). Used by both solo and multiplayer. |
 | `js/words.js` | Fetches and validates `words.json` for the browser. |
-| `js/game.js` | Solo game engine (no DOM). Timing knobs in `CONFIG` at the top: `startWindowMs`, `shrinkPerWordMs`, `minWindowMs`. |
+| `js/reveal.js` | The game-over pictures. Maps a word to a Wikipedia photo (title overrides for tricky ones) + emoji + short caption ("A camel can't fly."). Characters are emoji-only (no copyrighted stills). Photos cached in localStorage. The cards' emoji↔photo oscillation is driven in `js/ui.js` (`renderReveals`). |
+| `js/game.js` | Solo game engine (no DOM). Knobs in `CONFIG` at the top: `startWindowMs`, `shrinkPerWordMs`, `minWindowMs`, `lives`. |
 | `js/ui.js` | Everything on screen: word animations, timer bar, flashes, particles, name/lobby/report screens, player strip. |
 | `js/sfx.js` | All sounds, synthesized with Web Audio (no audio files). The soft correct-FLY chime is `correctFly()`; other effects are next to it. |
 | `js/main.js` | Startup + glue: preloader timing (`PRELOADER_MIN_ITERATIONS`), input wiring, solo flow, high score, Back-to-Home. |
 | `js/multiplayer.js` | Multiplayer client: create/join screens, sends answers with locally measured reaction time, reacts to server events (`round:start`, `round:result`, `game:over`, `room:closed`). |
 | `server/index.js` | The Node server: serves the site over HTTP, generates 6-char room codes, routes Socket.IO events to rooms, destroys a room when its creator disconnects. |
-| `server/room.js` | All multiplayer game rules: rounds, judging, elimination, the final report. Knobs in `GAME_CONFIG` at the top — including `maxPlayers: 5` (change this one number to allow bigger rooms). |
+| `server/room.js` | All multiplayer game rules: rounds, judging, lives, elimination, the final report. Knobs in `GAME_CONFIG` at the top — including `maxPlayers: 5` and `startingLives: 3`. |
 | `server/words.js` | Server-side loader for the same `words.json`. |
 
 Naming note: the SIT button is still called `ground` inside the code

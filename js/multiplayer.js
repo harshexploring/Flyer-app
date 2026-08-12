@@ -22,9 +22,11 @@ let active = false;      // this controller owns the input
 // Per-round state
 let currentRound = 0;
 let currentFlies = null;
+let currentWordObj = null; // { text, flies } — for the game-over reveal
 let shownAt = 0;
 let iAmAlive = false;
 let answered = false;
+let myMistakes = [];       // every word I got wrong (shown on game over)
 let localTimeoutTimer = null;
 
 export function isActive() {
@@ -58,6 +60,7 @@ function leave() {
 function renderLobby() {
   screen = 'lobby';
   ui.hidePlayersStrip();
+  ui.hideHearts();
   ui.showLobby({
     ...lobby,
     myId,
@@ -125,9 +128,11 @@ function bindEvents() {
   socket.on('game:start', ({ players }) => {
     screen = 'playing';
     iAmAlive = true;
+    myMistakes = [];
     ui.hideScreens();
     ui.hideWord();
     ui.setScore(0);
+    ui.showHearts(players.find((p) => p.id === myId)?.lives ?? 3);
     ui.setButtonsEnabled(true);
     ui.showSpectatorBanner(false);
     ui.showPlayersStrip(players, myId);
@@ -137,6 +142,7 @@ function bindEvents() {
   socket.on('round:start', ({ round, word, windowMs }) => {
     currentRound = round;
     currentFlies = word.flies;
+    currentWordObj = word;
     answered = false;
     ui.setScore(round - 1);
     ui.clearRoundBadges();
@@ -166,6 +172,14 @@ function bindEvents() {
     ui.stopTimer();
     ui.applyRoundOutcomes(outcomes);
 
+    // My own life/heart update + phone buzz on a life lost.
+    const mine = outcomes.find((o) => o.id === myId);
+    if (mine && !mine.correct) {
+      ui.setLives(mine.livesLeft);
+      ui.vibrate();
+      myMistakes.push(currentWordObj); // remember it for the game-over reveal
+    }
+
     if (iAmAlive && !aliveIds.includes(myId)) {
       iAmAlive = false;
       ui.setButtonsEnabled(false);
@@ -190,11 +204,14 @@ function bindEvents() {
     else sfx.gameOver();
 
     const isHost = !!lobby?.players.find((p) => p.id === myId)?.isHost;
+    ui.hideHearts();
     ui.showReport({
       report,
       winnerIds,
       myId,
       isHost,
+      // Show losers every word that beat them (winners: none).
+      revealWords: winnerIds.includes(myId) ? [] : myMistakes,
       onPlayAgain: () => { sfx.click(); socket.emit('game:start'); },
       onLeave: leave,
     });

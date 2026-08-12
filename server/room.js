@@ -15,6 +15,7 @@
 
 export const GAME_CONFIG = {
   maxPlayers: 5,
+  startingLives: 3,    // mistakes each player is allowed before elimination
   startWindowMs: 2000, // answer window for the first word
   shrinkPerWordMs: 50, // window shrinks this much every word
   minWindowMs: 700,    // window never goes below this
@@ -64,6 +65,7 @@ export class Room {
       id: p.id,
       name: p.name,
       isHost: p.isHost,
+      lives: p.lives,
     }));
   }
 
@@ -90,6 +92,7 @@ export class Room {
       isHost: isCreator,
       connected: true,
       alive: false,
+      lives: GAME_CONFIG.startingLives,
       correctCount: 0,
       reactionTimes: [],
       eliminatedRound: null,
@@ -112,6 +115,7 @@ export class Room {
       player.connected = false;
       if (player.alive) {
         player.alive = false;
+        player.lives = 0; // leaving mid-game = out, whatever lives remained
         player.eliminatedRound = this.round;
         this.emit('player:left', { id, name: player.name });
         // If everyone left answers, don't wait for the deadline.
@@ -146,6 +150,7 @@ export class Room {
     }
     for (const p of this.players.values()) {
       p.alive = true;
+      p.lives = GAME_CONFIG.startingLives;
       p.correctCount = 0;
       p.reactionTimes = [];
       p.eliminatedRound = null;
@@ -220,8 +225,11 @@ export class Room {
         player.correctCount += 1;
         player.reactionTimes.push(answer.reactionMs);
       } else {
-        player.alive = false;
-        player.eliminatedRound = this.round;
+        player.lives -= 1;                 // lose a life…
+        if (player.lives <= 0) {           // …out on the last one
+          player.alive = false;
+          player.eliminatedRound = this.round;
+        }
       }
       outcomes.push({
         id: player.id,
@@ -229,6 +237,7 @@ export class Room {
         action,
         correct,
         reactionMs: answer ? answer.reactionMs : null,
+        livesLeft: player.lives,
       });
     }
 

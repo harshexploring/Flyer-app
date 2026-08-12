@@ -5,15 +5,17 @@
 // All animation helpers are async so main.js can sequence them.
 // ============================================================
 
+import { getReveal } from './reveal.js';
+
 const els = {};
 
 export function init() {
   const ids = [
     'stage', 'word-card', 'flash', 'timer-fill',
-    'fly-btn', 'ground-btn', 'mute-btn',
+    'fly-btn', 'ground-btn', 'mute-btn', 'hearts',
     'score-pill', 'best-pill',
     'start-screen', 'gameover-screen', 'play-btn', 'replay-btn',
-    'killer-line', 'stat-survived', 'stat-avg', 'stat-fastest', 'new-best', 'home-btn',
+    'reveal-row', 'stat-survived', 'stat-avg', 'stat-fastest', 'new-best', 'home-btn',
     'friends-btn', 'name-screen', 'name-input', 'name-ok-btn',
     'lobby-screen', 'lobby-panel', 'report-screen', 'report-panel',
     'players-strip', 'spectator-banner',
@@ -191,6 +193,95 @@ export function setMuteIcon(muted) {
   els.muteBtn.textContent = muted ? '🔇' : '🔊';
 }
 
+// ---------------- Lives (hearts) ----------------
+
+let heartsPrev = 0;
+
+// Show a fresh row of `total` full hearts.
+export function showHearts(total = 3) {
+  els.hearts.innerHTML = Array.from({ length: total },
+    () => '<span class="heart">❤️</span>').join('');
+  heartsPrev = total;
+  els.hearts.classList.remove('hidden');
+}
+
+export function hideHearts() {
+  els.hearts.classList.add('hidden');
+}
+
+// Update how many hearts are full. The heart(s) that just went out
+// grey-fade, and the newest one gets a little "break" pop.
+export function setLives(n) {
+  const hearts = [...els.hearts.children];
+  hearts.forEach((h, i) => {
+    const lost = i >= n;
+    h.classList.toggle('lost', lost);
+    if (lost && i >= n && i < heartsPrev && i === n) {
+      h.classList.add('just-lost');
+      setTimeout(() => h.classList.remove('just-lost'), 460);
+    }
+  });
+  heartsPrev = n;
+}
+
+// Buzz the phone on a life loss (no-op on desktop / unsupported).
+export function vibrate(pattern = 200) {
+  try { navigator.vibrate?.(pattern); } catch { /* ignore */ }
+}
+
+// ---------------- Game-over picture reveal ----------------
+
+const revealTimers = []; // oscillation intervals, so we can stop them
+
+// Stop every running emoji↔photo oscillation and forget it.
+export function clearReveals() {
+  revealTimers.forEach(clearInterval);
+  revealTimers.length = 0;
+}
+
+// One card: a cartoon emoji + the real photo, cross-fading back and
+// forth (~1.1s each) so you get a good look at both.
+function buildRevealCard(wordObj) {
+  const { emoji, caption, imagePromise } = getReveal(wordObj);
+  const card = document.createElement('div');
+  card.className = 'reveal-card';
+
+  const media = document.createElement('div');
+  media.className = 'reveal-media';
+  const em = document.createElement('span');
+  em.className = 'reveal-emoji';
+  em.textContent = emoji;
+  media.appendChild(em);
+
+  const cap = document.createElement('div');
+  cap.className = 'reveal-cap';
+  cap.textContent = caption;
+
+  card.append(media, cap);
+
+  imagePromise.then((url) => {
+    if (!url) return; // no photo (character / offline) → emoji stays put
+    const img = new Image();
+    img.className = 'reveal-photo';
+    img.alt = wordObj.text;
+    img.onload = () => {
+      media.appendChild(img);
+      media.classList.add('show-photo'); // show the real one first
+      revealTimers.push(setInterval(
+        () => media.classList.toggle('show-photo'), 1100));
+    };
+    img.src = url;
+  });
+  return card;
+}
+
+// Render one card per word (the mistakes that cost a life) into a row.
+export function renderReveals(container, wordObjs) {
+  clearReveals();
+  container.innerHTML = '';
+  for (const w of wordObjs || []) container.appendChild(buildRevealCard(w));
+}
+
 export function setButtonsEnabled(enabled) {
   els.flyBtn.disabled = !enabled;
   els.groundBtn.disabled = !enabled;
@@ -210,15 +301,12 @@ export function showStartScreen() {
   els.gameoverScreen.classList.add('hidden');
 }
 
-export function showGameOver({ stats, word, action, isNewBest }) {
-  const why =
-    action === 'timeout'
-      ? `Too slow! “${word.text}” ${word.flies ? 'flew away' : 'just sat there'}…`
-      : word.flies
-        ? `Oops — a ${word.text.toLowerCase()} does fly!`
-        : `Oops — a ${word.text.toLowerCase()} can't fly!`;
+export function showGameOver({ stats, mistakes, isNewBest }) {
+  // Show every word that cost a life — each as an emoji that cross-fades
+  // with its real photo — so the player learns all of them, not just
+  // the last one.
+  renderReveals(els.revealRow, mistakes);
 
-  els.killerLine.textContent = why;
   els.statSurvived.textContent = stats.survived;
   els.statAvg.textContent = stats.avgMs != null ? `${stats.avgMs} ms` : '–';
   els.statFastest.textContent = stats.bestMs != null ? `${stats.bestMs} ms` : '–';
@@ -227,6 +315,7 @@ export function showGameOver({ stats, word, action, isNewBest }) {
 }
 
 export function hideScreens() {
+  clearReveals(); // stop any oscillating reveal animations
   els.startScreen.classList.add('hidden');
   els.gameoverScreen.classList.add('hidden');
   els.nameScreen.classList.add('hidden');
@@ -357,10 +446,19 @@ export function showMpError(message, { onBack } = {}) {
 
 // ---------------- Players strip ----------------
 
+let mpTotalLives = 3;
+
+function heartRow(left, total) {
+  return Array.from({ length: total },
+    (_, i) => `<span class="h${i < left ? '' : ' lost'}">❤️</span>`).join('');
+}
+
 export function showPlayersStrip(players, myId) {
+  mpTotalLives = players[0]?.lives ?? 3;
   els.playersStrip.innerHTML = players.map((p) => `
     <div class="player-chip alive ${p.id === myId ? 'me' : ''}" data-player-id="${esc(p.id)}">
       <span class="chip-name">${esc(p.name)}</span>
+      <span class="chip-lives">${heartRow(p.lives ?? mpTotalLives, mpTotalLives)}</span>
       <span class="chip-ms hidden"></span>
     </div>`).join('');
   els.playersStrip.classList.remove('hidden');
@@ -375,21 +473,27 @@ function chip(id) {
   return els.playersStrip.querySelector(`[data-player-id="${CSS.escape(id)}"]`);
 }
 
-// After each round: green stays alive, red = out; show reaction ms.
+// After each round: update each player's hearts, reaction time, and
+// (only when their lives hit 0) flip them to the eliminated look.
 export function applyRoundOutcomes(outcomes) {
   for (const o of outcomes) {
     const el = chip(o.id);
     if (!el) continue;
     const ms = el.querySelector('.chip-ms');
+    const lives = el.querySelector('.chip-lives');
+    if (lives && o.livesLeft != null) {
+      lives.innerHTML = heartRow(o.livesLeft, mpTotalLives);
+    }
     if (o.correct) {
       ms.textContent = `${o.reactionMs} ms`;
-      ms.classList.remove('hidden');
     } else {
-      el.classList.remove('alive');
-      el.classList.add('dead');
       ms.textContent = o.action === 'timeout' ? '⏰' : '✗';
-      ms.classList.remove('hidden');
+      if (o.livesLeft <= 0) {
+        el.classList.remove('alive');
+        el.classList.add('dead');
+      }
     }
+    ms.classList.remove('hidden');
   }
 }
 
@@ -412,15 +516,18 @@ export function showSpectatorBanner(show) {
 
 // ---------------- Final report ----------------
 
-export function showReport({ report, winnerIds, myId, isHost, onPlayAgain, onLeave }) {
+export function showReport({ report, winnerIds, myId, isHost, revealWords, onPlayAgain, onLeave }) {
   const fmt = (v, suffix = '') => (v == null ? '–' : `${v}${suffix}`);
   const title = winnerIds.length === 0
-    ? '💥 Everyone udd gaya!'
-    : winnerIds.includes(myId) ? '🏆 You win!' : '🏁 Game over!';
+    ? '😢 Everyone udd gaya!'
+    : winnerIds.includes(myId) ? '🏆 You win!' : '😢 Game over!';
 
   els.reportPanel.innerHTML = `
     <h1 class="panel-title">${title}</h1>
     <p class="panel-sub">${winnerIds.length ? esc(report.find((r) => r.winner)?.name ?? '') + ' is the last one standing' : 'it ends in a draw'}</p>
+    ${revealWords?.length ? `
+      <p class="panel-sub reveal-heading">What caught you out:</p>
+      <div class="reveal-row" id="report-reveal-row"></div>` : ''}
     <table class="report-table">
       <thead>
         <tr><th>Player</th><th>Result</th><th>Correct</th><th>Avg</th><th>Fastest</th></tr>
@@ -442,6 +549,12 @@ export function showReport({ report, winnerIds, myId, isHost, onPlayAgain, onLea
     </div>
   `;
   els.reportScreen.classList.remove('hidden');
+
+  // If the local player was knocked out, show every word that beat them.
+  if (revealWords?.length) {
+    renderReveals(document.getElementById('report-reveal-row'), revealWords);
+  }
+
   document.getElementById('report-again-btn')?.addEventListener('click', onPlayAgain);
   document.getElementById('report-leave-btn').addEventListener('click', onLeave);
 }

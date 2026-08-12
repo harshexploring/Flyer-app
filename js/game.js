@@ -11,6 +11,7 @@ export const CONFIG = {
   startWindowMs: 2000, // time allowed for the first word
   shrinkPerWordMs: 50, // window shrinks this much every word
   minWindowMs: 700,    // window never goes below this
+  lives: 3,            // mistakes allowed before game over
 };
 
 function shuffle(arr) {
@@ -33,8 +34,10 @@ export class Game {
     this.deck = [];
     this.round = 0;
     this.reactionTimes = [];
+    this.mistakes = [];   // words that cost a life (shown on game over)
     this.currentWord = null;
     this.lastWordText = null;
+    this.lives = CONFIG.lives;
     this.playing = false;
     this.awaitingAnswer = false;
   }
@@ -96,7 +99,9 @@ export class Game {
     if (correct) {
       this.reactionTimes.push(reactionMs);
     } else {
-      this.playing = false; // sudden death
+      this.mistakes.push(this.currentWord); // remember it for the reveal
+      this.lives -= 1;              // lose a life…
+      if (this.lives <= 0) this.playing = false; // …game over on the last
     }
 
     this.hooks.onResult({
@@ -104,6 +109,9 @@ export class Game {
       action,
       word: this.currentWord,
       reactionMs,
+      livesLeft: this.lives,
+      lostLife: !correct,
+      gameOver: !this.playing,
     });
   }
 
