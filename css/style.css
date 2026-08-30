@@ -451,13 +451,18 @@ body {
 .overlay {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  overflow-y: auto; /* tall panels scroll instead of clipping */
   background: rgba(60, 80, 100, 0.35);
   backdrop-filter: blur(3px);
   z-index: 30;
-  padding: 16px;
+  /* keep content clear of the phone's nav bar / home indicator */
+  padding: 18px 16px calc(24px + env(safe-area-inset-bottom));
 }
+
+/* margin:auto centres the panel but, unlike align-items:center, lets it
+   scroll fully into view when it's taller than the screen. */
+.overlay > .panel { margin: auto; }
 
 .overlay.hidden { display: none; }
 
@@ -1051,6 +1056,80 @@ body {
 .lb-score { font-weight: 700; }
 
 .lb-empty { text-align: center; opacity: 0.6; padding: 24px 0; font-weight: 500; }
+
+/* ---------------- Profile ---------------- */
+
+.who-chevron { opacity: 0.7; font-size: 0.9rem; }
+
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  text-align: left;
+}
+
+.profile-av {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 3px solid var(--ink);
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+.profile-av.ph { display: grid; place-items: center; background: #fff; font-size: 1.6rem; }
+
+.profile-name { font-size: 1.4rem; font-weight: 700; }
+
+.profile-sub { font-size: 0.9rem; font-weight: 600; color: #d98a00; }
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.profile-grid .stat { background: #f4eede; border-radius: 16px; padding: 12px 6px; }
+
+.profile-h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+  text-align: left;
+}
+
+.tricky-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.tricky-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.tricky-chip.fly { background: #d7efff; }
+.tricky-chip.sit { background: #f3e2cc; }
+
+.tricky-n { font-size: 0.75rem; opacity: 0.7; }
+
+.tricky-hint { font-size: 0.85rem; opacity: 0.7; margin-bottom: 20px; font-weight: 500; }
+
+.tricky-empty { opacity: 0.7; margin-bottom: 20px; font-weight: 500; }
+
+@media (max-width: 420px) {
+  .profile-grid { grid-template-columns: repeat(2, 1fr); }
+}
 
 /* ---------------- Small screens ---------------- */
 

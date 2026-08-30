@@ -20,6 +20,7 @@ export function init() {
     'lobby-screen', 'lobby-panel', 'report-screen', 'report-panel',
     'players-strip', 'spectator-banner',
     'auth-row', 'leaderboard-btn', 'leaderboard-screen', 'leaderboard-panel', 'rank-line',
+    'profile-screen', 'profile-panel',
   ];
   for (const id of ids) {
     els[id.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] =
@@ -323,19 +324,23 @@ export function hideScreens() {
   els.lobbyScreen.classList.add('hidden');
   els.reportScreen.classList.add('hidden');
   els.leaderboardScreen.classList.add('hidden');
+  els.profileScreen.classList.add('hidden');
 }
 
 // ---------------- Accounts & leaderboard ----------------
 
 // The Google sign-in button / signed-in identity on the home screen.
-export function renderAuthRow(user, { onSignIn, onSignOut }) {
+// The identity chip opens the profile.
+export function renderAuthRow(user, { onSignIn, onSignOut, onProfile }) {
   if (user) {
     els.authRow.innerHTML = `
-      <span class="who">
+      <button class="who" id="profile-open">
         ${user.avatar ? `<img class="who-av" src="${esc(user.avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="who-av ph">🙂</span>'}
         <span class="who-name">${esc(user.name)}</span>
-      </span>
+        <span class="who-chevron">📊</span>
+      </button>
       <button class="btn-small" id="signout-btn">Sign out</button>`;
+    els.authRow.querySelector('#profile-open').addEventListener('click', onProfile);
     els.authRow.querySelector('#signout-btn').addEventListener('click', onSignOut);
   } else {
     els.authRow.innerHTML =
@@ -402,6 +407,52 @@ export function showLeaderboard({ load, onBack, myName }) {
 
 export function hideLeaderboard() {
   els.leaderboardScreen.classList.add('hidden');
+}
+
+// The player's profile: headline stats + the words they miss most.
+export function showProfile({ user, stats, rank, onBack }) {
+  const s = stats || {};
+  const num = (v, suffix = '') => (v == null ? '–' : `${v}${suffix}`);
+  const rankSub = rank && rank.total >= 5 && rank.percentile != null
+    ? `🏆 Rank #${rank.rank} · top ${rank.percentile}%`
+    : (s.played ? 'Keep playing to climb the ranks!' : 'Play a game to start your stats!');
+
+  const tricky = (s.topMisses || []).length
+    ? `<div class="tricky-list">${s.topMisses.map((m) => `
+        <span class="tricky-chip ${m.flies ? 'fly' : 'sit'}">
+          ${esc(m.word)} <span class="tricky-n">×${m.misses}</span>
+        </span>`).join('')}</div>
+       <p class="tricky-hint">${s.topMisses[0].flies ? 'Remember: these fly! 🕊️' : 'Watch these — some don\'t fly.'}</p>`
+    : '<p class="tricky-empty">No tricky words yet — nicely done! ✨</p>';
+
+  els.profilePanel.innerHTML = `
+    <div class="profile-head">
+      ${user.avatar
+        ? `<img class="profile-av" src="${esc(user.avatar)}" alt="" referrerpolicy="no-referrer">`
+        : '<span class="profile-av ph">🙂</span>'}
+      <div class="profile-id">
+        <div class="profile-name">${esc(user.name)}</div>
+        <div class="profile-sub">${rankSub}</div>
+      </div>
+    </div>
+
+    <div class="profile-grid">
+      <div class="stat"><span class="stat-num">${num(s.best)}</span><span class="stat-label">best run</span></div>
+      <div class="stat"><span class="stat-num">${num(s.played)}</span><span class="stat-label">games played</span></div>
+      <div class="stat"><span class="stat-num">${num(s.fastest, ' ms')}</span><span class="stat-label">fastest</span></div>
+      <div class="stat"><span class="stat-num">${num(s.streak)}🔥</span><span class="stat-label">day streak</span></div>
+    </div>
+
+    <h2 class="profile-h2">🎯 Your tricky words</h2>
+    ${tricky}
+
+    <button class="btn-small" id="profile-back">Back</button>`;
+  els.profileScreen.classList.remove('hidden');
+  els.profilePanel.querySelector('#profile-back').addEventListener('click', onBack);
+}
+
+export function hideProfile() {
+  els.profileScreen.classList.add('hidden');
 }
 
 // ---------------- Multiplayer screens ----------------

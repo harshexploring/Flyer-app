@@ -113,3 +113,40 @@ create or replace view public.leaderboard_fastest
 grant select on public.leaderboard_alltime to anon, authenticated;
 grant select on public.leaderboard_weekly  to anon, authenticated;
 grant select on public.leaderboard_fastest to anon, authenticated;
+
+-- 6) Per-word miss counts, so a player can see the words they trip on
+--    most ("your tricky words"). One row per (user, word).
+create table if not exists public.word_misses (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  word    text not null,
+  flies   boolean,
+  misses  int not null default 0,
+  primary key (user_id, word)
+);
+alter table public.word_misses enable row level security;
+
+drop policy if exists "word_misses self read" on public.word_misses;
+create policy "word_misses self read" on public.word_misses
+  for select using (auth.uid() = user_id);
+
+-- Bump miss counts for the current user. Called once per game with the
+-- list of words that cost a life. security definer so it can upsert,
+-- but it only ever writes rows for auth.uid().
+create or replace function public.record_misses(p_words text[], p_flies boolean[])
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare i int;
+begin
+  if auth.uid() is null then return; end if;
+  for i in 1 .. coalesce(array_length(p_words, 1), 0) loop
+    insert into public.word_misses (user_id, word, flies, misses)
+    values (auth.uid(), p_words[i], p_flies[i], 1)
+    on conflict (user_id, word)
+      do update set misses = public.word_misses.misses + 1;
+  end loop;
+end;
+$$;
+
+grant execute on function public.record_misses(text[], boolean[]) to authenticated;

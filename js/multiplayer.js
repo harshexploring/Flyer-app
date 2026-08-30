@@ -215,6 +215,7 @@ function bindEvents() {
         correct: me.correct,
         mistakes: myMistakes.length,
       });
+      auth.recordMisses(myMistakes);
     }
 
     const isHost = !!lobby?.players.find((p) => p.id === myId)?.isHost;

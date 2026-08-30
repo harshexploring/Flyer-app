@@ -142,22 +142,60 @@ export async function getLeaderboard(kind = 'alltime') {
   return data || [];
 }
 
-// My aggregate stats (best run, fastest reaction, games, MP win-rate-ish).
+// Record the words that cost a life this game (signed-in players only),
+// so the profile can show "your tricky words".
+export async function recordMisses(mistakes) {
+  const c = await getClient();
+  if (!c || !currentUser || !mistakes?.length) return;
+  const words = mistakes.map((m) => m.text);
+  const flies = mistakes.map((m) => !!m.flies);
+  const { error } = await c.rpc('record_misses', { p_words: words, p_flies: flies });
+  if (error) console.warn('record_misses failed:', error.message);
+}
+
+// Count consecutive days (up to today/yesterday) the player has games for.
+function dayStreak(playedAts) {
+  const days = new Set(playedAts.map((t) => new Date(t).toDateString()));
+  if (days.size === 0) return 0;
+  const oneDay = 86400000;
+  let streak = 0;
+  const d = new Date();
+  // If they haven't played today, the streak can still be "alive" from
+  // yesterday — start counting there.
+  if (!days.has(d.toDateString())) d.setTime(d.getTime() - oneDay);
+  while (days.has(d.toDateString())) { streak += 1; d.setTime(d.getTime() - oneDay); }
+  return streak;
+}
+
+// Everything the profile screen needs.
 export async function getMyStats() {
   const c = await getClient();
   if (!c || !currentUser) return null;
   const { data: games, error } = await c
     .from('games')
-    .select('mode, words_survived, best_ms')
+    .select('mode, words_survived, best_ms, played_at')
     .eq('user_id', currentUser.id);
   if (error || !games) return null;
+
   const best = games.reduce((m, g) => Math.max(m, g.words_survived), 0);
   const fastest = games.reduce(
     (m, g) => (g.best_ms != null ? Math.min(m, g.best_ms) : m), Infinity);
+  const mpGames = games.filter((g) => g.mode === 'multiplayer').length;
+
+  const { data: misses } = await c
+    .from('word_misses')
+    .select('word, flies, misses')
+    .eq('user_id', currentUser.id)
+    .order('misses', { ascending: false })
+    .limit(6);
+
   return {
     best,
     fastest: fastest === Infinity ? null : fastest,
     played: games.length,
+    mpGames,
+    streak: dayStreak(games.map((g) => g.played_at)),
+    topMisses: misses || [],
   };
 }
 

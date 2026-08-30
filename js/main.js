@@ -15,6 +15,7 @@ const HIGHSCORE_KEY = 'flyer-highscore';
 let highscore = Number(localStorage.getItem(HIGHSCORE_KEY) || 0);
 let inputLocked = true; // true while animations run or no game is on
 let game = null;        // created once words.json has loaded
+let accountBest = null; // signed-in player's server best (null = guest)
 
 const hooks = {
 
@@ -63,12 +64,21 @@ const hooks = {
   },
 
   onGameOver(stats) {
-    const isNewBest = stats.survived > highscore;
-    if (isNewBest) {
-      highscore = stats.survived;
-      localStorage.setItem(HIGHSCORE_KEY, String(highscore));
+    // Best score follows the account when signed in (same everywhere),
+    // and falls back to this device's localStorage for guests.
+    const loggedIn = !!auth.getUser();
+    const baseline = loggedIn ? (accountBest ?? 0) : highscore;
+    const isNewBest = stats.survived > baseline;
+    if (loggedIn) {
+      accountBest = Math.max(accountBest ?? 0, stats.survived);
+      ui.setBest(accountBest);
+    } else {
+      if (isNewBest) {
+        highscore = stats.survived;
+        localStorage.setItem(HIGHSCORE_KEY, String(highscore));
+      }
+      ui.setBest(highscore);
     }
-    ui.setBest(highscore);
     ui.setButtonsEnabled(false);
     sfx.gameOver();
     ui.showGameOver({
@@ -76,12 +86,12 @@ const hooks = {
       mistakes: game.mistakes, // every word that cost a life
       isNewBest,
     });
-    handleGameOverAccount(stats, game.mistakes.length);
+    handleGameOverAccount(stats, game.mistakes);
   },
 };
 
-// Save the run (if signed in) and show rank; nudge guests to sign in.
-async function handleGameOverAccount(stats, mistakeCount) {
+// Save the run + tricky words (if signed in) and show rank; nudge guests.
+async function handleGameOverAccount(stats, mistakes) {
   if (!auth.getUser()) {
     ui.setRankLine({ guest: true, onSignIn: () => { sfx.click(); auth.signInWithGoogle(); } });
     return;
@@ -93,11 +103,23 @@ async function handleGameOverAccount(stats, mistakeCount) {
     bestMs: stats.bestMs,
     avgMs: stats.avgMs,
     correct: stats.survived,
-    mistakes: mistakeCount,
+    mistakes: mistakes.length,
   });
+  await auth.recordMisses(mistakes);
   const { rank, total, percentile } = await auth.getRankForScore(stats.survived);
   const pct = percentile != null && total >= 5 ? ` · top ${percentile}%` : '';
   ui.setRankLine(`🏆 Rank #${rank}${pct}`);
+}
+
+// Open the profile / stats screen.
+async function openProfile() {
+  sfx.click();
+  const user = auth.getUser();
+  if (!user) return;
+  ui.showProfile({ user, stats: null, rank: null, onBack: () => { sfx.click(); ui.hideProfile(); } });
+  const stats = await auth.getMyStats();
+  const rank = await auth.getRankForScore(stats?.best ?? 0);
+  ui.showProfile({ user, stats, rank, onBack: () => { sfx.click(); ui.hideProfile(); } });
 }
 
 function startGame() {
@@ -171,11 +193,22 @@ const preloaderShownAt = performance.now();
 
 // ---------------- Accounts ----------------
 
-auth.onAuthChange((user) => {
+auth.onAuthChange(async (user) => {
   ui.renderAuthRow(user, {
     onSignIn: () => { sfx.click(); auth.signInWithGoogle(); },
     onSignOut: () => { sfx.click(); auth.signOut(); },
+    onProfile: openProfile,
   });
+  if (user) {
+    // Load this account's best from the server so it's the same on
+    // every device — not whatever is cached on this one.
+    const stats = await auth.getMyStats();
+    accountBest = stats?.best ?? 0;
+    ui.setBest(accountBest);
+  } else {
+    accountBest = null;
+    ui.setBest(highscore);
+  }
 });
 auth.initAuth();
 
