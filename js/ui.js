@@ -19,6 +19,7 @@ export function init() {
     'friends-btn', 'name-screen', 'name-input', 'name-ok-btn',
     'lobby-screen', 'lobby-panel', 'report-screen', 'report-panel',
     'players-strip', 'spectator-banner',
+    'auth-row', 'leaderboard-btn', 'leaderboard-screen', 'leaderboard-panel', 'rank-line',
   ];
   for (const id of ids) {
     els[id.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] =
@@ -321,6 +322,86 @@ export function hideScreens() {
   els.nameScreen.classList.add('hidden');
   els.lobbyScreen.classList.add('hidden');
   els.reportScreen.classList.add('hidden');
+  els.leaderboardScreen.classList.add('hidden');
+}
+
+// ---------------- Accounts & leaderboard ----------------
+
+// The Google sign-in button / signed-in identity on the home screen.
+export function renderAuthRow(user, { onSignIn, onSignOut }) {
+  if (user) {
+    els.authRow.innerHTML = `
+      <span class="who">
+        ${user.avatar ? `<img class="who-av" src="${esc(user.avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="who-av ph">🙂</span>'}
+        <span class="who-name">${esc(user.name)}</span>
+      </span>
+      <button class="btn-small" id="signout-btn">Sign out</button>`;
+    els.authRow.querySelector('#signout-btn').addEventListener('click', onSignOut);
+  } else {
+    els.authRow.innerHTML =
+      `<button class="btn-google" id="signin-btn"><span class="g-mark">G</span> Sign in with Google</button>`;
+    els.authRow.querySelector('#signin-btn').addEventListener('click', onSignIn);
+  }
+}
+
+// Game-over rank line. Pass html for a signed-in rank, or a guest nudge
+// object { guest: true, onSignIn } to show the sign-in prompt.
+export function setRankLine(content) {
+  if (!content) { els.rankLine.classList.add('hidden'); els.rankLine.innerHTML = ''; return; }
+  if (typeof content === 'string') {
+    els.rankLine.innerHTML = content;
+  } else if (content.guest) {
+    els.rankLine.innerHTML =
+      `<button class="btn-google sm" id="go-signin-btn"><span class="g-mark">G</span> Sign in to save your rank</button>`;
+    els.rankLine.querySelector('#go-signin-btn').addEventListener('click', content.onSignIn);
+  }
+  els.rankLine.classList.remove('hidden');
+}
+
+// The leaderboard overlay. `load(kind)` returns rows for a tab.
+export function showLeaderboard({ load, onBack, myName }) {
+  els.leaderboardPanel.innerHTML = `
+    <h1 class="panel-title">🏆 Leaderboard</h1>
+    <div class="lb-tabs">
+      <button class="lb-tab active" data-kind="alltime">All-time</button>
+      <button class="lb-tab" data-kind="weekly">This Week</button>
+      <button class="lb-tab" data-kind="fastest">Fastest</button>
+    </div>
+    <div class="lb-list" id="lb-list"><p class="lb-empty">Loading…</p></div>
+    <button class="btn-small" id="lb-back">Back</button>`;
+  els.leaderboardScreen.classList.remove('hidden');
+
+  const listEl = els.leaderboardPanel.querySelector('#lb-list');
+  const render = async (kind) => {
+    listEl.innerHTML = '<p class="lb-empty">Loading…</p>';
+    const rows = await load(kind);
+    if (!rows.length) {
+      listEl.innerHTML = '<p class="lb-empty">No scores yet — be the first! 🥇</p>';
+      return;
+    }
+    listEl.innerHTML = rows.map((r, i) => {
+      const metric = kind === 'fastest' ? `${r.best_ms} ms` : `${r.best_words}`;
+      const medal = ['🥇', '🥈', '🥉'][i] || `#${i + 1}`;
+      const me = myName && r.display_name === myName ? ' me' : '';
+      const av = r.avatar_url
+        ? `<img class="lb-av" src="${esc(r.avatar_url)}" alt="" referrerpolicy="no-referrer">`
+        : '<span class="lb-av ph">🙂</span>';
+      return `<div class="lb-row${me}"><span class="lb-rank">${medal}</span>${av}<span class="lb-name">${esc(r.display_name)}</span><span class="lb-score">${metric}</span></div>`;
+    }).join('');
+  };
+
+  els.leaderboardPanel.querySelectorAll('.lb-tab').forEach((t) =>
+    t.addEventListener('click', () => {
+      els.leaderboardPanel.querySelectorAll('.lb-tab').forEach((x) => x.classList.remove('active'));
+      t.classList.add('active');
+      render(t.dataset.kind);
+    }));
+  els.leaderboardPanel.querySelector('#lb-back').addEventListener('click', onBack);
+  render('alltime');
+}
+
+export function hideLeaderboard() {
+  els.leaderboardScreen.classList.add('hidden');
 }
 
 // ---------------- Multiplayer screens ----------------

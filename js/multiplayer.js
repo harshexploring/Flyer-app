@@ -11,6 +11,7 @@
 
 import { sfx } from './sfx.js';
 import * as ui from './ui.js';
+import * as auth from './auth.js';
 
 let socket = null;
 let myId = null;
@@ -202,6 +203,19 @@ function bindEvents() {
 
     if (winnerIds.includes(myId)) sfx.start(); // victory arpeggio
     else sfx.gameOver();
+
+    // Save my multiplayer run to the leaderboard (signed-in players only).
+    const me = report.find((r) => r.id === myId);
+    if (me) {
+      auth.saveGame({
+        mode: 'multiplayer',
+        wordsSurvived: me.correct,
+        bestMs: me.bestMs,
+        avgMs: me.avgMs,
+        correct: me.correct,
+        mistakes: myMistakes.length,
+      });
+    }
 
     const isHost = !!lobby?.players.find((p) => p.id === myId)?.isHost;
     ui.hideHearts();

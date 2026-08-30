@@ -8,6 +8,7 @@ import { loadWords } from './words.js';
 import { sfx, setMuted, isMuted } from './sfx.js';
 import * as ui from './ui.js';
 import * as mp from './multiplayer.js';
+import * as auth from './auth.js';
 
 const HIGHSCORE_KEY = 'flyer-highscore';
 
@@ -75,8 +76,29 @@ const hooks = {
       mistakes: game.mistakes, // every word that cost a life
       isNewBest,
     });
+    handleGameOverAccount(stats, game.mistakes.length);
   },
 };
+
+// Save the run (if signed in) and show rank; nudge guests to sign in.
+async function handleGameOverAccount(stats, mistakeCount) {
+  if (!auth.getUser()) {
+    ui.setRankLine({ guest: true, onSignIn: () => { sfx.click(); auth.signInWithGoogle(); } });
+    return;
+  }
+  ui.setRankLine('<span class="rank-saving">Saving your run…</span>');
+  await auth.saveGame({
+    mode: 'solo',
+    wordsSurvived: stats.survived,
+    bestMs: stats.bestMs,
+    avgMs: stats.avgMs,
+    correct: stats.survived,
+    mistakes: mistakeCount,
+  });
+  const { rank, total, percentile } = await auth.getRankForScore(stats.survived);
+  const pct = percentile != null && total >= 5 ? ` · top ${percentile}%` : '';
+  ui.setRankLine(`🏆 Rank #${rank}${pct}`);
+}
 
 function startGame() {
   if (!game) return; // words still loading
@@ -146,6 +168,25 @@ const preloaderShownAt = performance.now();
 })();
 
 // ---------------- Event wiring ----------------
+
+// ---------------- Accounts ----------------
+
+auth.onAuthChange((user) => {
+  ui.renderAuthRow(user, {
+    onSignIn: () => { sfx.click(); auth.signInWithGoogle(); },
+    onSignOut: () => { sfx.click(); auth.signOut(); },
+  });
+});
+auth.initAuth();
+
+ui.els.leaderboardBtn.addEventListener('click', () => {
+  sfx.click();
+  ui.showLeaderboard({
+    load: (kind) => auth.getLeaderboard(kind),
+    onBack: () => { sfx.click(); ui.hideLeaderboard(); },
+    myName: auth.getUser()?.name,
+  });
+});
 
 ui.els.playBtn.addEventListener('click', () => { sfx.click(); startGame(); });
 ui.els.replayBtn.addEventListener('click', () => { sfx.click(); startGame(); });

@@ -83,6 +83,29 @@ working, and every remaining player is notified and sent back home.
 | `server/index.js` | The Node server: serves the site over HTTP, generates 6-char room codes, routes Socket.IO events to rooms, destroys a room when its creator disconnects. |
 | `server/room.js` | All multiplayer game rules: rounds, judging, lives, elimination, the final report. Knobs in `GAME_CONFIG` at the top — including `maxPlayers: 5` and `startingLives: 3`. |
 | `server/words.js` | Server-side loader for the same `words.json`. |
+| `js/auth.js` | Accounts + leaderboard, via Supabase: Google sign-in, save each game, read the leaderboards, compute rank/percentile. All optional — guests skip it entirely. |
+| `config/supabase.js` | Your Supabase project URL + publishable key (safe in the browser). Copy from `supabase.example.js`. |
+| `supabase/schema.sql` | The database: `profiles`, `games`, RLS, leaderboard views, anti-cheat CHECK constraints. Run once in the Supabase SQL editor. |
+| `js/lib/supabase.js` | Vendored Supabase JS client (no external CDN at runtime). |
+
+## Accounts & leaderboard (optional)
+
+Sign-in is **Google-only** and **optional** — guests play everything with
+nothing saved. Signing in lets a player save every game and appear on the
+global leaderboards (All-time / This Week / Fastest), and shows a rank +
+"top X%" on the game-over screen. Scores live in **Supabase** (Postgres +
+Auth); the realtime multiplayer server is unchanged.
+
+**Data protection:** Row-Level Security means a user can only read/write
+their own rows; the leaderboards are public views that expose only display
+name + avatar + score (never email or anything private). Impossible scores
+(reaction times under 120 ms) are rejected by database constraints.
+
+**Setup (one-time):** create a free Supabase project, run
+`supabase/schema.sql`, enable the Google provider (Supabase → Auth →
+Providers) with a Google Cloud OAuth client, then put your project URL +
+publishable key in `config/supabase.js`. If that file is blank, the game
+just runs as guest-only.
 
 Naming note: the SIT button is still called `ground` inside the code
 (`ground-btn`, action `'ground'`) — only the visible label changed.
@@ -165,6 +188,10 @@ Deployed as one Render Web Service (`render.yaml`).
 
 ## Roadmap
 
+- [x] Accounts (Google sign-in) + global leaderboards (Supabase)
+- [ ] Friends / private-group leaderboards
+- [ ] Profile page: progress graph, "your tricky words", achievements
+- [ ] Phone OTP sign-in (needs an SMS provider + India DLT)
 - [ ] Reconnect/rejoin mid-game (currently a disconnect = elimination)
 - [ ] Tricky mode (penguin, ostrich, Superman…)
 - [ ] Hindi / Hinglish word packs
