@@ -31,6 +31,7 @@
     <div class="logo">🪽 Flyer</div>
     <div class="nav-right">
       <div class="hearts hidden" id="hearts" aria-label="Lives"></div>
+      <button class="pill pill-rating hidden" id="rating-pill" title="Your rating — tap for stats">–</button>
       <span class="pill" id="score-pill">Word 0</span>
       <span class="pill pill-gold" id="best-pill">Best 0</span>
       <button class="icon-btn" id="mute-btn" aria-label="Toggle sound">🔊</button>
@@ -106,10 +107,18 @@
         <div class="start-buttons">
           <button class="btn-big" id="play-btn">Play Solo</button>
           <button class="btn-big btn-friends" id="friends-btn">Play with Friends</button>
-          <button class="btn-small" id="leaderboard-btn">🏆 Leaderboard</button>
+          <div class="secondary-row">
+            <button class="btn-small" id="leaderboard-btn">🏆 Leaderboard</button>
+            <button class="btn-small" id="feedback-btn">💬 Feedback</button>
+          </div>
         </div>
         <div class="auth-row" id="auth-row"></div>
       </div>
+    </div>
+
+    <!-- Feedback -->
+    <div class="overlay hidden" id="feedback-screen">
+      <div class="panel" id="feedback-panel"></div>
     </div>
 
     <!-- Leaderboard -->

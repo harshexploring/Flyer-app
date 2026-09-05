@@ -6,6 +6,7 @@
 // ============================================================
 
 import { getReveal } from './reveal.js';
+import { tierFor } from './rating.js';
 
 const els = {};
 
@@ -20,7 +21,8 @@ export function init() {
     'lobby-screen', 'lobby-panel', 'report-screen', 'report-panel',
     'players-strip', 'spectator-banner',
     'auth-row', 'leaderboard-btn', 'leaderboard-screen', 'leaderboard-panel', 'rank-line',
-    'profile-screen', 'profile-panel',
+    'profile-screen', 'profile-panel', 'rating-pill',
+    'feedback-btn', 'feedback-screen', 'feedback-panel',
   ];
   for (const id of ids) {
     els[id.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] =
@@ -195,6 +197,15 @@ export function setMuteIcon(muted) {
   els.muteBtn.textContent = muted ? '🔇' : '🔊';
 }
 
+// Navbar rating chip. Pass a rating info object, or null to hide (guest).
+export function setRating(info) {
+  if (!info || info.games === 0) { els.ratingPill.classList.add('hidden'); return; }
+  const tier = tierFor(info.rating);
+  els.ratingPill.style.background = tier.color;
+  els.ratingPill.textContent = `${tier.emoji} ${info.rating}${info.provisional ? '?' : ''}`;
+  els.ratingPill.classList.remove('hidden');
+}
+
 // ---------------- Lives (hearts) ----------------
 
 let heartsPrev = 0;
@@ -325,6 +336,7 @@ export function hideScreens() {
   els.reportScreen.classList.add('hidden');
   els.leaderboardScreen.classList.add('hidden');
   els.profileScreen.classList.add('hidden');
+  els.feedbackScreen.classList.add('hidden');
 }
 
 // ---------------- Accounts & leaderboard ----------------
@@ -368,7 +380,7 @@ export function showLeaderboard({ load, onBack, myName }) {
   els.leaderboardPanel.innerHTML = `
     <h1 class="panel-title">🏆 Leaderboard</h1>
     <div class="lb-tabs">
-      <button class="lb-tab active" data-kind="alltime">All-time</button>
+      <button class="lb-tab active" data-kind="rating">Rating</button>
       <button class="lb-tab" data-kind="weekly">This Week</button>
       <button class="lb-tab" data-kind="fastest">Fastest</button>
     </div>
@@ -385,7 +397,9 @@ export function showLeaderboard({ load, onBack, myName }) {
       return;
     }
     listEl.innerHTML = rows.map((r, i) => {
-      const metric = kind === 'fastest' ? `${r.best_ms} ms` : `${r.best_words}`;
+      const metric = kind === 'fastest' ? `${r.best_ms} ms`
+        : kind === 'rating' ? `${tierFor(r.rating).emoji} ${r.rating}`
+        : `${r.best_words}`;
       const medal = ['🥇', '🥈', '🥉'][i] || `#${i + 1}`;
       const me = myName && r.display_name === myName ? ' me' : '';
       const av = r.avatar_url
@@ -402,27 +416,31 @@ export function showLeaderboard({ load, onBack, myName }) {
       render(t.dataset.kind);
     }));
   els.leaderboardPanel.querySelector('#lb-back').addEventListener('click', onBack);
-  render('alltime');
+  render('rating');
 }
 
 export function hideLeaderboard() {
   els.leaderboardScreen.classList.add('hidden');
 }
 
-// The player's profile: headline stats + the words they miss most.
+// The player's profile: rating, headline stats, and recent tricky words.
 export function showProfile({ user, stats, rank, onBack }) {
   const s = stats || {};
   const num = (v, suffix = '') => (v == null ? '–' : `${v}${suffix}`);
+  const r = s.rating;
+  const tier = r ? tierFor(r.rating) : null;
   const rankSub = rank && rank.total >= 5 && rank.percentile != null
-    ? `🏆 Rank #${rank.rank} · top ${rank.percentile}%`
-    : (s.played ? 'Keep playing to climb the ranks!' : 'Play a game to start your stats!');
+    ? ` · top ${rank.percentile}%` : '';
+  const sub = tier
+    ? `${tier.emoji} ${tier.name} · <b>${r.rating}</b>${r.provisional ? ' (provisional)' : ''}${rankSub}`
+    : (s.played ? 'Keep playing to earn a rating!' : 'Play a game to start your stats!');
 
   const tricky = (s.topMisses || []).length
     ? `<div class="tricky-list">${s.topMisses.map((m) => `
         <span class="tricky-chip ${m.flies ? 'fly' : 'sit'}">
           ${esc(m.word)} <span class="tricky-n">×${m.misses}</span>
         </span>`).join('')}</div>
-       <p class="tricky-hint">${s.topMisses[0].flies ? 'Remember: these fly! 🕊️' : 'Watch these — some don\'t fly.'}</p>`
+       <p class="tricky-hint">Your latest slip-ups — get these next time!</p>`
     : '<p class="tricky-empty">No tricky words yet — nicely done! ✨</p>';
 
   els.profilePanel.innerHTML = `
@@ -432,13 +450,14 @@ export function showProfile({ user, stats, rank, onBack }) {
         : '<span class="profile-av ph">🙂</span>'}
       <div class="profile-id">
         <div class="profile-name">${esc(user.name)}</div>
-        <div class="profile-sub">${rankSub}</div>
+        <div class="profile-sub"${tier ? ` style="color:${tier.color}"` : ''}>${sub}</div>
       </div>
     </div>
 
     <div class="profile-grid">
       <div class="stat"><span class="stat-num">${num(s.best)}</span><span class="stat-label">best run</span></div>
-      <div class="stat"><span class="stat-num">${num(s.played)}</span><span class="stat-label">games played</span></div>
+      <div class="stat"><span class="stat-num">${num(s.played)}</span><span class="stat-label">games</span></div>
+      <div class="stat"><span class="stat-num">${num(s.avgReaction, ' ms')}</span><span class="stat-label">avg reaction</span></div>
       <div class="stat"><span class="stat-num">${num(s.fastest, ' ms')}</span><span class="stat-label">fastest</span></div>
       <div class="stat"><span class="stat-num">${num(s.streak)}🔥</span><span class="stat-label">day streak</span></div>
     </div>
@@ -453,6 +472,43 @@ export function showProfile({ user, stats, rank, onBack }) {
 
 export function hideProfile() {
   els.profileScreen.classList.add('hidden');
+}
+
+// ---------------- Feedback ----------------
+
+export function showFeedback({ onSubmit, onBack }) {
+  els.feedbackPanel.innerHTML = `
+    <h1 class="panel-title">💬 Feedback</h1>
+    <p class="panel-sub">How's Flyer treating you?</p>
+    <div class="stars" id="fb-stars">
+      ${[1, 2, 3, 4, 5].map((n) => `<button class="star" data-n="${n}">☆</button>`).join('')}
+    </div>
+    <textarea class="text-input fb-comment" id="fb-comment" maxlength="500"
+      placeholder="Anything you'd change? (optional)"></textarea>
+    <button class="btn-big" id="fb-send">Send</button>
+    <p style="margin-top:10px"><button class="btn-small" id="fb-back">Back</button></p>`;
+  els.feedbackScreen.classList.remove('hidden');
+
+  let rating = 0;
+  const stars = [...els.feedbackPanel.querySelectorAll('.star')];
+  const paint = () => stars.forEach((s, i) => { s.textContent = i < rating ? '★' : '☆'; });
+  stars.forEach((s, i) => s.addEventListener('click', () => { rating = i + 1; paint(); }));
+
+  els.feedbackPanel.querySelector('#fb-send').addEventListener('click', async () => {
+    if (rating === 0) { els.feedbackPanel.querySelector('#fb-stars').classList.add('shake'); return; }
+    const comment = els.feedbackPanel.querySelector('#fb-comment').value.trim();
+    const ok = await onSubmit({ rating, comment });
+    els.feedbackPanel.innerHTML = `
+      <h1 class="panel-title">${ok ? '🙏 Thank you!' : '😕 Hmm'}</h1>
+      <p class="panel-sub">${ok ? 'Your feedback really helps.' : 'Could not send — please try again later.'}</p>
+      <button class="btn-big" id="fb-done">Close</button>`;
+    els.feedbackPanel.querySelector('#fb-done').addEventListener('click', onBack);
+  });
+  els.feedbackPanel.querySelector('#fb-back').addEventListener('click', onBack);
+}
+
+export function hideFeedback() {
+  els.feedbackScreen.classList.add('hidden');
 }
 
 // ---------------- Multiplayer screens ----------------

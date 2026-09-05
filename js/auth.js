@@ -7,6 +7,7 @@
 // ============================================================
 
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/supabase.js';
+import { computeRating } from './rating.js';
 
 let client = null;
 let clientPromise = null;
@@ -129,17 +130,34 @@ export async function saveGame({ mode, wordsSurvived, bestMs, avgMs, correct, mi
 }
 
 const VIEWS = {
-  alltime: 'leaderboard_alltime',
+  rating: 'leaderboard_rating',
   weekly: 'leaderboard_weekly',
   fastest: 'leaderboard_fastest',
+  // Not a leaderboard tab — used by getRankForScore() to rank a run by
+  // words survived. Keep it here or rank lookups silently break.
+  alltime: 'leaderboard_alltime',
 };
 
-export async function getLeaderboard(kind = 'alltime') {
+export async function getLeaderboard(kind = 'rating') {
   const c = await getClient();
   if (!c) return [];
-  const { data, error } = await c.from(VIEWS[kind] || VIEWS.alltime).select('*');
+  const { data, error } = await c.from(VIEWS[kind] || VIEWS.rating).select('*');
   if (error) { console.warn('leaderboard failed:', error.message); return []; }
   return data || [];
+}
+
+// Leave feedback (⭐ 1-5 + optional comment). Works for signed-in users.
+export async function submitFeedback({ rating, comment }) {
+  const c = await getClient();
+  if (!c) return false;
+  const { error } = await c.from('feedback').insert({
+    user_id: currentUser?.id ?? null,
+    name: currentUser?.name ?? 'Guest',
+    rating,
+    comment: comment || null,
+  });
+  if (error) { console.warn('feedback failed:', error.message); return false; }
+  return true;
 }
 
 // Record the words that cost a life this game (signed-in players only),
@@ -167,48 +185,59 @@ function dayStreak(playedAts) {
   return streak;
 }
 
-// Everything the profile screen needs.
+// Everything the profile / navbar needs, including the live rating.
 export async function getMyStats() {
   const c = await getClient();
   if (!c || !currentUser) return null;
   const { data: games, error } = await c
     .from('games')
-    .select('mode, words_survived, best_ms, played_at')
+    .select('mode, words_survived, best_ms, avg_ms, correct, mistakes, played_at')
     .eq('user_id', currentUser.id);
   if (error || !games) return null;
 
   const best = games.reduce((m, g) => Math.max(m, g.words_survived), 0);
   const fastest = games.reduce(
     (m, g) => (g.best_ms != null ? Math.min(m, g.best_ms) : m), Infinity);
+  const avgVals = games.map((g) => g.avg_ms).filter((v) => v != null);
+  const avgReaction = avgVals.length
+    ? Math.round(avgVals.reduce((a, b) => a + b, 0) / avgVals.length) : null;
   const mpGames = games.filter((g) => g.mode === 'multiplayer').length;
 
+  // Only the most RECENTLY missed words (never a huge growing list).
   const { data: misses } = await c
     .from('word_misses')
     .select('word, flies, misses')
     .eq('user_id', currentUser.id)
-    .order('misses', { ascending: false })
-    .limit(6);
+    .order('last_missed_at', { ascending: false })
+    .limit(7);
 
   return {
     best,
     fastest: fastest === Infinity ? null : fastest,
+    avgReaction,
     played: games.length,
     mpGames,
     streak: dayStreak(games.map((g) => g.played_at)),
+    rating: computeRating(games),
     topMisses: misses || [],
   };
 }
 
-// Rank + percentile for a score, using the all-time board. Exact while
-// there are ≤100 players; approximate (top-100) beyond that.
+// Rank + "top X%" for a player's BEST score, against the all-time board.
+// Pass the player's best (not a single run's score) — the board is built
+// from bests, so mixing the two can rank you below yourself.
+// Exact while there are ≤100 players; approximate (top-100) beyond that.
 export async function getRankForScore(bestWords) {
   const board = await getLeaderboard('alltime');
   const total = board.length;
   if (total === 0) return { rank: 1, total: 0, percentile: null };
   const better = board.filter((r) => (r.best_words ?? 0) > bestWords).length;
+  const rank = better + 1;
   return {
-    rank: better + 1,
+    rank,
     total,
-    percentile: Math.max(1, Math.round((1 - better / total) * 100)),
+    // "top X%" — SMALLER is better. #1 of 4 → top 25%. Guard with
+    // max(rank,total) for a score not yet reflected on the board.
+    percentile: Math.max(1, Math.round((rank / Math.max(rank, total)) * 100)),
   };
 }

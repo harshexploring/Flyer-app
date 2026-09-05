@@ -83,29 +83,91 @@ working, and every remaining player is notified and sent back home.
 | `server/index.js` | The Node server: serves the site over HTTP, generates 6-char room codes, routes Socket.IO events to rooms, destroys a room when its creator disconnects. |
 | `server/room.js` | All multiplayer game rules: rounds, judging, lives, elimination, the final report. Knobs in `GAME_CONFIG` at the top — including `maxPlayers: 5` and `startingLives: 3`. |
 | `server/words.js` | Server-side loader for the same `words.json`. |
-| `js/auth.js` | Accounts + leaderboard, via Supabase: Google sign-in, save each game, read the leaderboards, compute rank/percentile. All optional — guests skip it entirely. |
+| `js/auth.js` | Accounts + data, via Supabase: Google sign-in, save each game, record tricky words, read leaderboards, compute stats, submit feedback. All optional — guests skip it entirely. |
+| `js/rating.js` | The Flyer Rating formula (accuracy/speed/depth over last 20 games) + tiers. Kept in sync with the `player_ratings` view in schema.sql. |
 | `config/supabase.js` | Your Supabase project URL + publishable key (safe in the browser). Copy from `supabase.example.js`. |
-| `supabase/schema.sql` | The database: `profiles`, `games`, RLS, leaderboard views, anti-cheat CHECK constraints. Run once in the Supabase SQL editor. |
+| `supabase/schema.sql` | The whole database (see "Accounts & leaderboard" and "Admin"). Run once in the Supabase SQL editor. |
+| `supabase/seed_words.sql` | Seeds the `words` table from `words.json`. Run once after schema.sql. |
 | `js/lib/supabase.js` | Vendored Supabase JS client (no external CDN at runtime). |
+| `admin.html` + `js/admin.js` + `css/admin.css` | The admin dashboard (players, aggregates, feedback, words CRUD). Gated by an email allow-list. |
+| `words.json` | Now only a **fallback/seed**. At runtime the game reads words from the Supabase `words` table (see "Words in the database"). |
 
 ## Accounts & leaderboard (optional)
 
 Sign-in is **Google-only** and **optional** — guests play everything with
-nothing saved. Signing in lets a player save every game and appear on the
-global leaderboards (All-time / This Week / Fastest), and shows a rank +
-"top X%" on the game-over screen. Scores live in **Supabase** (Postgres +
+nothing saved. Signing in lets a player save every game, get a **rating**,
+and appear on the leaderboards. Scores live in **Supabase** (Postgres +
 Auth); the realtime multiplayer server is unchanged.
 
-**Data protection:** Row-Level Security means a user can only read/write
-their own rows; the leaderboards are public views that expose only display
-name + avatar + score (never email or anything private). Impossible scores
-(reaction times under 120 ms) are rejected by database constraints.
+**What a signed-in player gets:**
+- **Rating** (see below) shown as a chip in the navbar (tap it for the
+  profile) and on the leaderboard.
+- **Profile / stats** (tap your name or the rating chip): best run, games
+  played, **average** and fastest reaction, day streak, rank, and your
+  **most-recent tricky words** (the ~7 latest words you missed).
+- **Best score follows the account**, loaded from the server — the same on
+  every device, not this browser's localStorage (guests still use local).
+- A rank + "top X%" line on the game-over screen, with a sign-in nudge for
+  guests.
+- A **⭐ + comment feedback** prompt (Feedback button on the home screen).
 
-**Setup (one-time):** create a free Supabase project, run
-`supabase/schema.sql`, enable the Google provider (Supabase → Auth →
-Providers) with a Google Cloud OAuth client, then put your project URL +
-publishable key in `config/supabase.js`. If that file is blank, the game
-just runs as guest-only.
+**Player Rating (skill, not volume).** A single 0–3000 number over each
+player's **last 20 games**, so grinding many games can't inflate it:
+
+```
+accuracy = correct / (correct + mistakes)      weight 0.45
+speed    = clamp((700 - avgMs) / 450, 0..1)      weight 0.35   (250ms→best)
+depth    = clamp(bestWords / 35, 0..1)           weight 0.20
+rating   = round(3000 * weighted sum)
+```
+
+Tiers: Bronze / Silver / Gold / Platinum / Diamond; "provisional" under 5
+games. The **leaderboard's main board ranks by rating** (tabs: Rating /
+This Week / Fastest). The formula lives in BOTH `js/rating.js` (the
+player's own live rating) and the `player_ratings` view in `schema.sql`
+(everyone's, for the leaderboard) — **keep them in sync**.
+
+**Data protection:** Row-Level Security means a user can only read/write
+their own rows; leaderboards are public views exposing only name + avatar +
+score/rating (never email/phone). Impossible reaction times (<120 ms) are
+rejected by database CHECK constraints.
+
+## Words in the database
+
+Words now live in a Supabase `words` table so they can be edited from the
+admin dashboard without code changes. Both the browser (`js/words.js`) and
+the multiplayer server (`server/words.js`) read from that table, and fall
+back to the bundled `words.json` if the DB is unconfigured, empty, or
+unreachable. The server re-reads the table every 5 minutes, so admin edits
+reach new games without a restart.
+
+## Admin dashboard (`/admin.html`)
+
+One person — identified by their Google email in the `admins` table — can
+open `/admin.html`. Access is enforced by the `is_admin()` database
+function and RLS (a non-admin gets no data even if they load the page).
+Tabs:
+- **Players** — everyone onboarded, their games played, best, join/last-played dates.
+- **Aggregates** — total players/games, avg accuracy, and a reaction-time distribution chart.
+- **Feedback** — every ⭐ rating + comment players have left.
+- **Words** — add / delete fly and non-fly words directly (writes the `words` table).
+
+The admin signs in with the same Google button; since the session is shared
+across the same origin, signing in on the main site also unlocks
+`/admin.html`.
+
+**Setup (one-time):**
+1. Create a free Supabase project; run `supabase/schema.sql`, then
+   `supabase/seed_words.sql`.
+2. In `schema.sql`, set the admin email (the `insert into public.admins`
+   line) to your Google account before running.
+3. Enable the Google provider (Supabase → Auth → Providers) with a Google
+   Cloud OAuth client; add your site URL(s) under Auth → URL Configuration
+   (include `/admin.html` or a `/**` wildcard so admin sign-in can redirect).
+4. Put your project URL + publishable key in `config/supabase.js`.
+
+If `config/supabase.js` is blank, the game runs guest-only from
+`words.json` and the account/admin features are simply inert.
 
 Naming note: the SIT button is still called `ground` inside the code
 (`ground-btn`, action `'ground'`) — only the visible label changed.
@@ -182,15 +244,21 @@ sequenceDiagram
 ```
 
 **Tech per layer:** frontend is plain HTML/CSS/JS (ES modules, no
-framework, no build step); backend is Node.js + Express (static files) +
-Socket.IO (rooms & rounds); state is in server memory only — no database.
-Deployed as one Render Web Service (`render.yaml`).
+framework, no build step); the game/multiplayer backend is Node.js +
+Express + Socket.IO (rooms live in server memory); accounts, ratings,
+leaderboards, words, and feedback live in **Supabase** (Postgres + Auth +
+RLS). Deployed as one Render Web Service (`render.yaml`).
 
 ## Roadmap
 
-- [x] Accounts (Google sign-in) + global leaderboards (Supabase)
+- [x] Accounts (Google sign-in) + leaderboards (Supabase)
+- [x] Player Rating (skill-based) + tiers, navbar chip, profile stats
+- [x] Admin dashboard (players, aggregates, feedback, words CRUD)
+- [x] Words in the database (editable from admin, no code changes)
+- [x] Player feedback (⭐ + comment)
 - [ ] Friends / private-group leaderboards
-- [ ] Profile page: progress graph, "your tricky words", achievements
+- [ ] Profile progress graph + achievements/badges
+- [ ] "Practice your tricky words" mode
 - [ ] Phone OTP sign-in (needs an SMS provider + India DLT)
 - [ ] Reconnect/rejoin mid-game (currently a disconnect = elimination)
 - [ ] Tricky mode (penguin, ostrich, Superman…)

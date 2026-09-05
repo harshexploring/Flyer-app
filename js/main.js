@@ -106,9 +106,22 @@ async function handleGameOverAccount(stats, mistakes) {
     mistakes: mistakes.length,
   });
   await auth.recordMisses(mistakes);
-  const { rank, total, percentile } = await auth.getRankForScore(stats.survived);
+  // Rank against the board's bests — accountBest already includes this run.
+  const { rank, total, percentile } =
+    await auth.getRankForScore(Math.max(accountBest ?? 0, stats.survived));
   const pct = percentile != null && total >= 5 ? ` · top ${percentile}%` : '';
   ui.setRankLine(`🏆 Rank #${rank}${pct}`);
+  refreshAccountUI(); // update navbar rating + best after the new game
+}
+
+// Keep the navbar (best + rating) in sync with the signed-in account.
+async function refreshAccountUI() {
+  const user = auth.getUser();
+  if (!user) { accountBest = null; ui.setBest(highscore); ui.setRating(null); return; }
+  const stats = await auth.getMyStats();
+  accountBest = stats?.best ?? 0;
+  ui.setBest(accountBest);
+  ui.setRating(stats?.rating ?? null);
 }
 
 // Open the profile / stats screen.
@@ -193,24 +206,19 @@ const preloaderShownAt = performance.now();
 
 // ---------------- Accounts ----------------
 
-auth.onAuthChange(async (user) => {
+auth.onAuthChange((user) => {
   ui.renderAuthRow(user, {
     onSignIn: () => { sfx.click(); auth.signInWithGoogle(); },
     onSignOut: () => { sfx.click(); auth.signOut(); },
     onProfile: openProfile,
   });
-  if (user) {
-    // Load this account's best from the server so it's the same on
-    // every device — not whatever is cached on this one.
-    const stats = await auth.getMyStats();
-    accountBest = stats?.best ?? 0;
-    ui.setBest(accountBest);
-  } else {
-    accountBest = null;
-    ui.setBest(highscore);
-  }
+  // Best + rating follow the account (same on every device), not this
+  // device's localStorage.
+  refreshAccountUI();
 });
 auth.initAuth();
+
+ui.els.ratingPill.addEventListener('click', openProfile);
 
 ui.els.leaderboardBtn.addEventListener('click', () => {
   sfx.click();
@@ -218,6 +226,14 @@ ui.els.leaderboardBtn.addEventListener('click', () => {
     load: (kind) => auth.getLeaderboard(kind),
     onBack: () => { sfx.click(); ui.hideLeaderboard(); },
     myName: auth.getUser()?.name,
+  });
+});
+
+ui.els.feedbackBtn.addEventListener('click', () => {
+  sfx.click();
+  ui.showFeedback({
+    onSubmit: (f) => auth.submitFeedback(f),
+    onBack: () => { sfx.click(); ui.hideFeedback(); },
   });
 });
 

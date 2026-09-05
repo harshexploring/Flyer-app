@@ -25,7 +25,15 @@ const httpServer = createServer(app);
 // the game has no credentials or private data to protect.
 const io = new Server(httpServer, { cors: { origin: '*' } });
 
-const words = loadWords();
+// Load words once at startup, then refresh from the DB every few
+// minutes so the admin's word edits reach new games without a restart.
+// We mutate this array in place so every Room keeps seeing the latest.
+const words = await loadWords();
+setInterval(async () => {
+  const fresh = await loadWords();
+  if (fresh?.length) { words.length = 0; words.push(...fresh); }
+}, 5 * 60 * 1000);
+
 const rooms = new Map(); // code → Room
 
 // 6-character room codes; the alphabet avoids look-alike
