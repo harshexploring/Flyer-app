@@ -9,6 +9,7 @@ import { sfx, setMuted, isMuted } from './sfx.js';
 import * as ui from './ui.js';
 import * as mp from './multiplayer.js';
 import * as auth from './auth.js';
+import * as account from './account.js';
 
 const HIGHSCORE_KEY = 'flyer-highscore';
 
@@ -90,38 +91,23 @@ const hooks = {
   },
 };
 
-// Save the run + tricky words (if signed in) and show rank; nudge guests.
+// Save the run + tricky words (if signed in) and show how the rating
+// moved; nudge guests to sign in.
 async function handleGameOverAccount(stats, mistakes) {
   if (!auth.getUser()) {
-    ui.setRankLine({ guest: true, onSignIn: () => { sfx.click(); auth.signInWithGoogle(); } });
+    ui.setRatingLine({ guest: true, onSignIn: () => { sfx.click(); auth.signInWithGoogle(); } });
     return;
   }
-  ui.setRankLine('<span class="rank-saving">Saving your run…</span>');
-  await auth.saveGame({
+  ui.setRatingLine({ saving: true });
+  const { delta, saved } = await account.recordGame({
     mode: 'solo',
     wordsSurvived: stats.survived,
     bestMs: stats.bestMs,
     avgMs: stats.avgMs,
     correct: stats.survived,
     mistakes: mistakes.length,
-  });
-  await auth.recordMisses(mistakes);
-  // Rank against the board's bests — accountBest already includes this run.
-  const { rank, total, percentile } =
-    await auth.getRankForScore(Math.max(accountBest ?? 0, stats.survived));
-  const pct = percentile != null && total >= 5 ? ` · top ${percentile}%` : '';
-  ui.setRankLine(`🏆 Rank #${rank}${pct}`);
-  refreshAccountUI(); // update navbar rating + best after the new game
-}
-
-// Keep the navbar (best + rating) in sync with the signed-in account.
-async function refreshAccountUI() {
-  const user = auth.getUser();
-  if (!user) { accountBest = null; ui.setBest(highscore); ui.setRating(null); return; }
-  const stats = await auth.getMyStats();
-  accountBest = stats?.best ?? 0;
-  ui.setBest(accountBest);
-  ui.setRating(stats?.rating ?? null);
+  }, mistakes);
+  ui.setRatingLine({ rating: account.getRating(), delta, failed: !saved });
 }
 
 // Open the profile / stats screen.
@@ -129,10 +115,11 @@ async function openProfile() {
   sfx.click();
   const user = auth.getUser();
   if (!user) return;
-  ui.showProfile({ user, stats: null, rank: null, onBack: () => { sfx.click(); ui.hideProfile(); } });
-  const stats = await auth.getMyStats();
-  const rank = await auth.getRankForScore(stats?.best ?? 0);
-  ui.showProfile({ user, stats, rank, onBack: () => { sfx.click(); ui.hideProfile(); } });
+  const back = () => { sfx.click(); ui.hideProfile(); };
+  // Show cached stats instantly, then refresh in the background.
+  ui.showProfile({ user, stats: account.getStats(), onBack: back });
+  const stats = await account.refresh();
+  ui.showProfile({ user, stats, onBack: back });
 }
 
 function startGame() {
@@ -206,15 +193,23 @@ const preloaderShownAt = performance.now();
 
 // ---------------- Accounts ----------------
 
+// Navbar follows the account (same on every device), not this device's
+// localStorage. account.js emits after every refresh — including after
+// group games, which is what the solo-only refresh used to miss.
+account.onChange((stats) => {
+  if (!stats) { accountBest = null; ui.setBest(highscore); ui.setRating(null); return; }
+  accountBest = stats.best ?? 0;
+  ui.setBest(accountBest);
+  ui.setRating(stats.rating ?? null);
+});
+
 auth.onAuthChange((user) => {
   ui.renderAuthRow(user, {
     onSignIn: () => { sfx.click(); auth.signInWithGoogle(); },
     onSignOut: () => { sfx.click(); auth.signOut(); },
     onProfile: openProfile,
   });
-  // Best + rating follow the account (same on every device), not this
-  // device's localStorage.
-  refreshAccountUI();
+  account.refresh();
 });
 auth.initAuth();
 

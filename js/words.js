@@ -13,12 +13,17 @@ const WORDS_URL = new URL('../words.json', import.meta.url);
 async function fromDb() {
   if (!SUPABASE_URL || SUPABASE_URL.includes('YOUR-PROJECT')) return null;
   try {
+    // Hard timeout: a hanging request must never stop the game from
+    // starting — we just fall back to the bundled words.json.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
     const res = await fetch(`${SUPABASE_URL}/rest/v1/words?select=text,flies`, {
+      signal: ctrl.signal,
       headers: {
         apikey: SUPABASE_ANON_KEY,
         Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       },
-    });
+    }).finally(() => clearTimeout(timer));
     if (!res.ok) return null;
     const rows = await res.json();
     if (!Array.isArray(rows) || rows.length === 0) return null;

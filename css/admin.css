@@ -141,10 +141,12 @@
   background: #fffdf7; border: 2px solid var(--ink); border-radius: 999px;
   padding: 3px 6px 3px 12px; font-weight: 600; font-size: 0.85rem;
 }
-.word-del {
-  border: none; background: #f0605a; color: #fff; width: 18px; height: 18px;
+.word-del, .word-flip {
+  border: none; color: #fff; width: 18px; height: 18px;
   border-radius: 50%; cursor: pointer; font-weight: 700; line-height: 1; font-size: 0.9rem;
 }
+.word-del { background: #f0605a; }
+.word-flip { background: #4db3f0; }
 
 @media (max-width: 560px) {
   .words-cols { grid-template-columns: 1fr; }

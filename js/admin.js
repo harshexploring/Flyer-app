@@ -211,6 +211,8 @@ async function showWords() {
       <div class="words-list">
         ${list.map((w) => `
           <span class="word-chip">${esc(w.text)}
+            <button class="word-flip" data-id="${w.id}" data-flies="${w.flies}"
+              title="Move to the other list">⇄</button>
             <button class="word-del" data-id="${w.id}" title="Delete">×</button>
           </span>`).join('') || '<span class="admin-sub">none</span>'}
       </div>
@@ -240,6 +242,13 @@ async function showWords() {
   content().querySelectorAll('.word-del').forEach((b) => b.onclick = async () => {
     if (!confirm('Delete this word?')) return;
     const { error } = await sb.from('words').delete().eq('id', Number(b.dataset.id));
+    if (error) alert(error.message); else showWords();
+  });
+  // Update: move a word between the fly and sit lists.
+  content().querySelectorAll('.word-flip').forEach((b) => b.onclick = async () => {
+    const { error } = await sb.from('words')
+      .update({ flies: b.dataset.flies !== 'true' })
+      .eq('id', Number(b.dataset.id));
     if (error) alert(error.message); else showWords();
   });
 }

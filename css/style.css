@@ -466,6 +466,14 @@ body {
 
 .overlay.hidden { display: none; }
 
+/* Secondary overlays open ON TOP of a base overlay (e.g. tapping the
+   rating chip during Game Over). Without this they share z-index 30
+   with the game-over screen and lose on DOM order, so they'd render
+   underneath it. */
+#leaderboard-screen,
+#profile-screen,
+#feedback-screen { z-index: 40; }
+
 .hidden { display: none; }
 
 .panel {
@@ -983,6 +991,22 @@ body {
 }
 
 .rank-saving { opacity: 0.6; font-weight: 600; }
+
+/* Rating movement after a game (▲ / ▼ / no change) */
+.rank-line { flex-wrap: wrap; gap: 8px; align-items: center; }
+.rt-val { color: var(--ink); }
+.rt-up { color: #2e9e50; }
+.rt-down { color: var(--bad); }
+.rt-flat { color: var(--ink); opacity: 0.55; font-weight: 600; }
+.rt-crown {
+  background: #ffe9b3;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.9rem;
+}
+
+.stat-crown { background: #ffe9b3; }
 
 /* ---------------- Leaderboard ---------------- */
 

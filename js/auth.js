@@ -109,7 +109,7 @@ export async function signOut() {
 // ---------------- Data ----------------
 
 // Save one finished game. No-op for guests. Returns the row or null.
-export async function saveGame({ mode, wordsSurvived, bestMs, avgMs, correct, mistakes }) {
+export async function saveGame({ mode, wordsSurvived, bestMs, avgMs, correct, mistakes, won }) {
   const c = await getClient();
   if (!c || !currentUser) return null;
   const { data, error } = await c
@@ -122,6 +122,7 @@ export async function saveGame({ mode, wordsSurvived, bestMs, avgMs, correct, mi
       avg_ms: avgMs ?? null,
       correct: correct ?? 0,
       mistakes: mistakes ?? 0,
+      won: !!won,
     })
     .select()
     .single();
@@ -133,9 +134,6 @@ const VIEWS = {
   rating: 'leaderboard_rating',
   weekly: 'leaderboard_weekly',
   fastest: 'leaderboard_fastest',
-  // Not a leaderboard tab — used by getRankForScore() to rank a run by
-  // words survived. Keep it here or rank lookups silently break.
-  alltime: 'leaderboard_alltime',
 };
 
 export async function getLeaderboard(kind = 'rating') {
@@ -191,7 +189,7 @@ export async function getMyStats() {
   if (!c || !currentUser) return null;
   const { data: games, error } = await c
     .from('games')
-    .select('mode, words_survived, best_ms, avg_ms, correct, mistakes, played_at')
+    .select('mode, words_survived, best_ms, avg_ms, correct, mistakes, played_at, won')
     .eq('user_id', currentUser.id);
   if (error || !games) return null;
 
@@ -201,7 +199,9 @@ export async function getMyStats() {
   const avgVals = games.map((g) => g.avg_ms).filter((v) => v != null);
   const avgReaction = avgVals.length
     ? Math.round(avgVals.reduce((a, b) => a + b, 0) / avgVals.length) : null;
+  // Group games count toward every stat, same as solo.
   const mpGames = games.filter((g) => g.mode === 'multiplayer').length;
+  const crowns = games.filter((g) => g.won).length;
 
   // Only the most RECENTLY missed words (never a huge growing list).
   const { data: misses } = await c
@@ -217,27 +217,10 @@ export async function getMyStats() {
     avgReaction,
     played: games.length,
     mpGames,
+    crowns,
     streak: dayStreak(games.map((g) => g.played_at)),
     rating: computeRating(games),
     topMisses: misses || [],
   };
 }
 
-// Rank + "top X%" for a player's BEST score, against the all-time board.
-// Pass the player's best (not a single run's score) — the board is built
-// from bests, so mixing the two can rank you below yourself.
-// Exact while there are ≤100 players; approximate (top-100) beyond that.
-export async function getRankForScore(bestWords) {
-  const board = await getLeaderboard('alltime');
-  const total = board.length;
-  if (total === 0) return { rank: 1, total: 0, percentile: null };
-  const better = board.filter((r) => (r.best_words ?? 0) > bestWords).length;
-  const rank = better + 1;
-  return {
-    rank,
-    total,
-    // "top X%" — SMALLER is better. #1 of 4 → top 25%. Guard with
-    // max(rank,total) for a score not yet reflected on the board.
-    percentile: Math.max(1, Math.round((rank / Math.max(rank, total)) * 100)),
-  };
-}

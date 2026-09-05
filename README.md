@@ -84,7 +84,8 @@ working, and every remaining player is notified and sent back home.
 | `server/room.js` | All multiplayer game rules: rounds, judging, lives, elimination, the final report. Knobs in `GAME_CONFIG` at the top — including `maxPlayers: 5` and `startingLives: 3`. |
 | `server/words.js` | Server-side loader for the same `words.json`. |
 | `js/auth.js` | Accounts + data, via Supabase: Google sign-in, save each game, record tricky words, read leaderboards, compute stats, submit feedback. All optional — guests skip it entirely. |
-| `js/rating.js` | The Flyer Rating formula (accuracy/speed/depth over last 20 games) + tiers. Kept in sync with the `player_ratings` view in schema.sql. |
+| `js/rating.js` | The Flyer Rating formula (accuracy/speed/depth over last 20 games, + crown bonus) and tiers. Kept in sync with the `player_ratings` view in schema.sql. |
+| `js/account.js` | The **only** path that records a finished game (solo and group) and caches the player's stats/rating. Emits on change so the navbar always follows. |
 | `config/supabase.js` | Your Supabase project URL + publishable key (safe in the browser). Copy from `supabase.example.js`. |
 | `supabase/schema.sql` | The whole database (see "Accounts & leaderboard" and "Admin"). Run once in the Supabase SQL editor. |
 | `supabase/seed_words.sql` | Seeds the `words` table from `words.json`. Run once after schema.sql. |
@@ -115,17 +116,34 @@ Auth); the realtime multiplayer server is unchanged.
 player's **last 20 games**, so grinding many games can't inflate it:
 
 ```
-accuracy = correct / (correct + mistakes)      weight 0.45
-speed    = clamp((700 - avgMs) / 450, 0..1)      weight 0.35   (250ms→best)
-depth    = clamp(bestWords / 35, 0..1)           weight 0.20
-rating   = round(3000 * weighted sum)
+accuracy   = correct / (correct + mistakes)      weight 0.45
+speed      = clamp((700 - avgMs) / 450, 0..1)      weight 0.35   (250ms→best)
+depth      = clamp(bestWords / 35, 0..1)           weight 0.20
+base       = 3000 * weighted sum
+crownBonus = min(300, 30 * crowns)                 (+30 per group-game win)
+rating     = min(3000, base + crownBonus)
 ```
+
+**Crowns 👑 = group games won.** Counted over *all* games (a win is a
+lasting achievement, not recent form), each worth **+30 rating, capped at
++300** — so winning a group game moves the rating far more than a solo run,
+which only nudges a 20-game average.
 
 Tiers: Bronze / Silver / Gold / Platinum / Diamond; "provisional" under 5
 games. The **leaderboard's main board ranks by rating** (tabs: Rating /
 This Week / Fastest). The formula lives in BOTH `js/rating.js` (the
 player's own live rating) and the `player_ratings` view in `schema.sql`
 (everyone's, for the leaderboard) — **keep them in sync**.
+
+**Group games count exactly like solo games** — same stats, same average
+reaction time, same rating — plus a Crown on a win. Both modes record
+through `js/account.js`, deliberately the *only* path that saves a game, so
+a mode can't silently skip the stats/navbar refresh (an earlier bug: only
+solo refreshed, so group play appeared to do nothing).
+
+**After a game we show the rating CHANGE, not a rank** ("Rating 1512 ▲ +26").
+A leaderboard rank barely moves and tells the player nothing about their own
+progress; the delta does.
 
 **Data protection:** Row-Level Security means a user can only read/write
 their own rows; leaderboards are public views exposing only name + avatar +
@@ -134,12 +152,18 @@ rejected by database CHECK constraints.
 
 ## Words in the database
 
-Words now live in a Supabase `words` table so they can be edited from the
-admin dashboard without code changes. Both the browser (`js/words.js`) and
-the multiplayer server (`server/words.js`) read from that table, and fall
-back to the bundled `words.json` if the DB is unconfigured, empty, or
-unreachable. The server re-reads the table every 5 minutes, so admin edits
-reach new games without a restart.
+Words live in a Supabase `words` table so they can be edited from the admin
+dashboard without code changes. Both the browser (`js/words.js`) and the
+multiplayer server (`server/words.js`) read that table, with a 6-second
+timeout, and fall back to the bundled `words.json` if the DB is
+unconfigured, empty, unreachable, or slow. The server re-reads the table
+every 5 minutes, so admin edits reach new games without a restart.
+
+⚠️ **The table wins whenever it has any rows.** If it holds 20 words, the
+game uses those 20 — `words.json` (232 words) is a fallback, not a merge.
+After changing `words.json`, re-run `supabase/seed_words.sql` to push the
+new words into the table (`ON CONFLICT DO NOTHING`, so it only adds what's
+missing and never touches words you edited in the admin).
 
 ## Admin dashboard (`/admin.html`)
 
@@ -150,7 +174,7 @@ Tabs:
 - **Players** — everyone onboarded, their games played, best, join/last-played dates.
 - **Aggregates** — total players/games, avg accuracy, and a reaction-time distribution chart.
 - **Feedback** — every ⭐ rating + comment players have left.
-- **Words** — add / delete fly and non-fly words directly (writes the `words` table).
+- **Words** — add (`Add word`), move between the fly/sit lists (`⇄`), and delete (`×`) — full CRUD on the `words` table.
 
 The admin signs in with the same Google button; since the session is shared
 across the same origin, signing in on the main site also unlocks
@@ -256,6 +280,8 @@ RLS). Deployed as one Render Web Service (`render.yaml`).
 - [x] Admin dashboard (players, aggregates, feedback, words CRUD)
 - [x] Words in the database (editable from admin, no code changes)
 - [x] Player feedback (⭐ + comment)
+- [x] Crowns 👑 (group games won) + a bigger rating boost for winning
+- [x] Rating change (▲/▼) after every game instead of a rank
 - [ ] Friends / private-group leaderboards
 - [ ] Profile progress graph + achievements/badges
 - [ ] "Practice your tricky words" mode

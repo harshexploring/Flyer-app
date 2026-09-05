@@ -22,12 +22,17 @@ function fromFile() {
 async function fromDb() {
   if (!SUPABASE_URL || SUPABASE_URL.includes('YOUR-PROJECT')) return null;
   try {
+    // Hard timeout so a slow/unreachable Supabase can never block the
+    // game server from starting — we fall back to words.json instead.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
     const res = await fetch(`${SUPABASE_URL}/rest/v1/words?select=text,flies`, {
+      signal: ctrl.signal,
       headers: {
         apikey: SUPABASE_ANON_KEY,
         Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       },
-    });
+    }).finally(() => clearTimeout(timer));
     if (!res.ok) return null;
     const rows = await res.json();
     if (!Array.isArray(rows) || rows.length === 0) return null;

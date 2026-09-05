@@ -20,8 +20,8 @@ export function init() {
     'friends-btn', 'name-screen', 'name-input', 'name-ok-btn',
     'lobby-screen', 'lobby-panel', 'report-screen', 'report-panel',
     'players-strip', 'spectator-banner',
-    'auth-row', 'leaderboard-btn', 'leaderboard-screen', 'leaderboard-panel', 'rank-line',
-    'profile-screen', 'profile-panel', 'rating-pill',
+    'auth-row', 'leaderboard-btn', 'leaderboard-screen', 'leaderboard-panel',
+    'profile-screen', 'profile-panel', 'rating-pill', 'rating-line',
     'feedback-btn', 'feedback-screen', 'feedback-panel',
   ];
   for (const id of ids) {
@@ -361,18 +361,42 @@ export function renderAuthRow(user, { onSignIn, onSignOut, onProfile }) {
   }
 }
 
-// Game-over rank line. Pass html for a signed-in rank, or a guest nudge
-// object { guest: true, onSignIn } to show the sign-in prompt.
-export function setRankLine(content) {
-  if (!content) { els.rankLine.classList.add('hidden'); els.rankLine.innerHTML = ''; return; }
-  if (typeof content === 'string') {
-    els.rankLine.innerHTML = content;
-  } else if (content.guest) {
-    els.rankLine.innerHTML =
-      `<button class="btn-google sm" id="go-signin-btn"><span class="g-mark">G</span> Sign in to save your rank</button>`;
-    els.rankLine.querySelector('#go-signin-btn').addEventListener('click', content.onSignIn);
+// How the player's rating moved this game. We deliberately show the
+// CHANGE (▲/▼), not a leaderboard rank — the rank barely moves and
+// tells the player nothing about their own progress.
+function ratingMoveHtml({ rating, delta, failed, crown, saving }) {
+  if (saving) return '<span class="rank-saving">Saving your run…</span>';
+  if (failed) return '<span class="rank-saving">Couldn’t save this run.</span>';
+  if (rating == null) return '';
+  const crownBit = crown ? '<span class="rt-crown">👑 Crown earned!</span>' : '';
+  let move = '';
+  if (delta > 0) move = `<span class="rt-up">▲ +${delta}</span>`;
+  else if (delta < 0) move = `<span class="rt-down">▼ ${delta}</span>`;
+  else if (delta === 0) move = '<span class="rt-flat">no change</span>';
+  return `${crownBit}<span class="rt-val">Rating ${rating}</span>${move}`;
+}
+
+// Game-over rating line. Pass { saving }, { rating, delta, failed, crown },
+// or { guest: true, onSignIn } to nudge guests to sign in.
+export function setRatingLine(info) {
+  if (!info) { els.ratingLine.classList.add('hidden'); els.ratingLine.innerHTML = ''; return; }
+  if (info.guest) {
+    els.ratingLine.innerHTML =
+      `<button class="btn-google sm" id="go-signin-btn"><span class="g-mark">G</span> Sign in to save your progress</button>`;
+    els.ratingLine.querySelector('#go-signin-btn').addEventListener('click', info.onSignIn);
+  } else {
+    els.ratingLine.innerHTML = ratingMoveHtml(info);
   }
-  els.rankLine.classList.remove('hidden');
+  els.ratingLine.classList.remove('hidden');
+}
+
+// Same, but inside the multiplayer report panel (rebuilt each game, so
+// the element may not exist — guard rather than throw).
+export function setReportRatingLine(info) {
+  const el = document.getElementById('report-rating-line');
+  if (!el) return;
+  el.innerHTML = ratingMoveHtml(info);
+  el.classList.remove('hidden');
 }
 
 // The leaderboard overlay. `load(kind)` returns rows for a tab.
@@ -424,15 +448,13 @@ export function hideLeaderboard() {
 }
 
 // The player's profile: rating, headline stats, and recent tricky words.
-export function showProfile({ user, stats, rank, onBack }) {
+export function showProfile({ user, stats, onBack }) {
   const s = stats || {};
   const num = (v, suffix = '') => (v == null ? '–' : `${v}${suffix}`);
   const r = s.rating;
   const tier = r ? tierFor(r.rating) : null;
-  const rankSub = rank && rank.total >= 5 && rank.percentile != null
-    ? ` · top ${rank.percentile}%` : '';
   const sub = tier
-    ? `${tier.emoji} ${tier.name} · <b>${r.rating}</b>${r.provisional ? ' (provisional)' : ''}${rankSub}`
+    ? `${tier.emoji} ${tier.name} · <b>${r.rating}</b>${r.provisional ? ' (provisional)' : ''}`
     : (s.played ? 'Keep playing to earn a rating!' : 'Play a game to start your stats!');
 
   const tricky = (s.topMisses || []).length
@@ -456,7 +478,9 @@ export function showProfile({ user, stats, rank, onBack }) {
 
     <div class="profile-grid">
       <div class="stat"><span class="stat-num">${num(s.best)}</span><span class="stat-label">best run</span></div>
+      <div class="stat stat-crown"><span class="stat-num">${num(s.crowns)}👑</span><span class="stat-label">crowns</span></div>
       <div class="stat"><span class="stat-num">${num(s.played)}</span><span class="stat-label">games</span></div>
+      <div class="stat"><span class="stat-num">${num(s.mpGames)}</span><span class="stat-label">group games</span></div>
       <div class="stat"><span class="stat-num">${num(s.avgReaction, ' ms')}</span><span class="stat-label">avg reaction</span></div>
       <div class="stat"><span class="stat-num">${num(s.fastest, ' ms')}</span><span class="stat-label">fastest</span></div>
       <div class="stat"><span class="stat-num">${num(s.streak)}🔥</span><span class="stat-label">day streak</span></div>
@@ -731,6 +755,7 @@ export function showReport({ report, winnerIds, myId, isHost, revealWords, onPla
           </tr>`).join('')}
       </tbody>
     </table>
+    <div class="rank-line hidden" id="report-rating-line"></div>
     <div class="report-actions">
       ${isHost ? '<button class="btn-big" id="report-again-btn">Play again</button>' : '<p class="lobby-hint">Waiting for the host to restart…</p>'}
       <button class="btn-small" id="report-leave-btn">Leave</button>

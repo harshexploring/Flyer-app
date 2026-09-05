@@ -28,6 +28,10 @@ create table if not exists public.games (
 create index if not exists games_user_idx   on public.games(user_id);
 create index if not exists games_played_idx on public.games(played_at desc);
 
+-- Did this game end in a group-game victory? Powers "Crowns" 👑 and the
+-- rating bonus. Added separately so existing installs upgrade cleanly.
+alter table public.games add column if not exists won boolean not null default false;
+
 -- The CHECK constraints above are our basic anti-cheat: the database
 -- itself rejects impossible reaction times (< 120 ms) and absurd runs,
 -- no matter what a tampered client tries to insert.
@@ -235,7 +239,12 @@ create policy "feedback admin read" on public.feedback
 --       rating   = round(3000 * weighted sum)
 --     Keep this formula in sync with computeRating() in js/rating.js.
 -- ============================================================
-create or replace view public.player_ratings
+-- Dropped + recreated (not "create or replace") because the column list
+-- changes when `crowns` is added; replace can only append columns.
+drop view if exists public.leaderboard_rating;
+drop view if exists public.player_ratings;
+
+create view public.player_ratings
   with (security_invoker = off) as
   with ranked as (
     select g.*, row_number() over (partition by g.user_id order by g.played_at desc) rn
@@ -250,21 +259,34 @@ create or replace view public.player_ratings
            max(words_survived)                        as best_words
     from ranked where rn <= 20
     group by user_id
+  ),
+  -- Crowns are counted over ALL games, not just the recent 20: a group
+  -- win is a lasting achievement, not recent form.
+  crown as (
+    select user_id, count(*) as crowns
+    from public.games where won group by user_id
   )
-  select p.display_name, p.avatar_url, a.games,
-         round(3000 * (
-             0.45 * coalesce(a.correct::numeric / nullif(a.correct + a.mistakes, 0), 0)
-           + 0.35 * greatest(0, least(1, (700 - coalesce(a.avg_ms, 700)) / 450.0))
-           + 0.20 * greatest(0, least(1, a.best_words / 35.0))
+  select p.display_name,
+         p.avatar_url,
+         a.games,
+         coalesce(c.crowns, 0)::int as crowns,
+         least(3000, round(
+           3000 * (
+               0.45 * coalesce(a.correct::numeric / nullif(a.correct + a.mistakes, 0), 0)
+             + 0.35 * greatest(0, least(1, (700 - coalesce(a.avg_ms, 700)) / 450.0))
+             + 0.20 * greatest(0, least(1, a.best_words / 35.0))
+           )
+           + least(300, 30 * coalesce(c.crowns, 0))   -- +30 per crown, capped +300
          ))::int as rating
   from agg a
-  join public.profiles p on p.id = a.user_id;
+  join public.profiles p on p.id = a.user_id
+  left join crown c on c.user_id = a.user_id;
 
-create or replace view public.leaderboard_rating
+create view public.leaderboard_rating
   with (security_invoker = off) as
-  select display_name, avatar_url, rating, games
+  select display_name, avatar_url, rating, games, crowns
   from public.player_ratings
-  order by rating desc, games desc
+  order by rating desc, crowns desc, games desc
   limit 100;
 
 grant select on public.leaderboard_rating to anon, authenticated;

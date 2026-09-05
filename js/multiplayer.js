@@ -12,6 +12,7 @@
 import { sfx } from './sfx.js';
 import * as ui from './ui.js';
 import * as auth from './auth.js';
+import * as account from './account.js';
 
 let socket = null;
 let myId = null;
@@ -204,20 +205,7 @@ function bindEvents() {
     if (winnerIds.includes(myId)) sfx.start(); // victory arpeggio
     else sfx.gameOver();
 
-    // Save my multiplayer run to the leaderboard (signed-in players only).
-    const me = report.find((r) => r.id === myId);
-    if (me) {
-      auth.saveGame({
-        mode: 'multiplayer',
-        wordsSurvived: me.correct,
-        bestMs: me.bestMs,
-        avgMs: me.avgMs,
-        correct: me.correct,
-        mistakes: myMistakes.length,
-      });
-      auth.recordMisses(myMistakes);
-    }
-
+    const iWon = winnerIds.includes(myId);
     const isHost = !!lobby?.players.find((p) => p.id === myId)?.isHost;
     ui.hideHearts();
     ui.showReport({
@@ -226,10 +214,30 @@ function bindEvents() {
       myId,
       isHost,
       // Show losers every word that beat them (winners: none).
-      revealWords: winnerIds.includes(myId) ? [] : myMistakes,
+      revealWords: iWon ? [] : myMistakes,
       onPlayAgain: () => { sfx.click(); socket.emit('game:start'); },
       onLeave: leave,
     });
+
+    // Group games count exactly like solo ones — same stats, same
+    // rating — and a win earns a Crown 👑 (a big rating boost).
+    const me = report.find((r) => r.id === myId);
+    if (me && auth.getUser()) {
+      ui.setReportRatingLine({ saving: true });
+      account.recordGame({
+        mode: 'multiplayer',
+        wordsSurvived: me.correct,
+        bestMs: me.bestMs,
+        avgMs: me.avgMs,
+        correct: me.correct,
+        mistakes: myMistakes.length,
+        won: iWon,
+      }, myMistakes).then(({ delta, saved }) => {
+        ui.setReportRatingLine({
+          rating: account.getRating(), delta, failed: !saved, crown: iWon,
+        });
+      });
+    }
   });
 
   // The room creator left → the room is gone. Notify and send
