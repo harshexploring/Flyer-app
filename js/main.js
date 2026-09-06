@@ -219,6 +219,7 @@ ui.els.leaderboardBtn.addEventListener('click', () => {
   sfx.click();
   ui.showLeaderboard({
     load: (kind) => auth.getLeaderboard(kind),
+    loadMyRank: () => auth.getMyRank(),
     onBack: () => { sfx.click(); ui.hideLeaderboard(); },
     myName: auth.getUser()?.name,
   });

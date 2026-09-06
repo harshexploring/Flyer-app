@@ -266,7 +266,8 @@ create view public.player_ratings
     select user_id, count(*) as crowns
     from public.games where won group by user_id
   )
-  select p.display_name,
+  select a.user_id,           -- NOT exposed publicly; leaderboard_rating omits it
+         p.display_name,
          p.avatar_url,
          a.games,
          coalesce(c.crowns, 0)::int as crowns,
@@ -290,3 +291,94 @@ create view public.leaderboard_rating
   limit 100;
 
 grant select on public.leaderboard_rating to anon, authenticated;
+
+-- ============================================================
+-- 11) Relax the reaction-time floor.
+--     The original floor of 120 ms rejected the WHOLE game row when a
+--     player reacted faster than that on a single round — so the better
+--     someone played, the more likely their run was silently lost.
+--     40 ms still blocks absurd/bot values; the client also clamps.
+-- ============================================================
+alter table public.games drop constraint if exists games_best_ms_check;
+alter table public.games drop constraint if exists games_avg_ms_check;
+alter table public.games add constraint games_best_ms_check
+  check (best_ms is null or (best_ms between 40 and 60000));
+alter table public.games add constraint games_avg_ms_check
+  check (avg_ms is null or (avg_ms between 40 and 60000));
+
+-- ============================================================
+-- 12) Email on the profile, so the admin directory can show it.
+--     Only the admin can read other people's profiles (policy in §7).
+-- ============================================================
+alter table public.profiles add column if not exists email text;
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.profiles (id, display_name, avatar_url, email)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data ->> 'full_name',
+             new.raw_user_meta_data ->> 'name', 'Player'),
+    new.raw_user_meta_data ->> 'avatar_url',
+    new.email
+  )
+  on conflict (id) do update set email = excluded.email;
+  return new;
+end;
+$$;
+
+-- Backfill emails for people who signed up before this column existed.
+update public.profiles p
+   set email = u.email
+  from auth.users u
+ where u.id = p.id and p.email is distinct from u.email;
+
+-- ============================================================
+-- 13) Admin needs to read everyone's misses + feedback aggregates.
+-- ============================================================
+drop policy if exists "word_misses admin read" on public.word_misses;
+create policy "word_misses admin read" on public.word_misses
+  for select using (public.is_admin());
+
+-- ============================================================
+-- 14) The signed-in player's own rank on the rating board.
+--     An RPC (not a public column) so player ids are never exposed.
+-- ============================================================
+create or replace function public.my_rank()
+returns table (rank int, rating int, total int)
+language sql stable security definer set search_path = public
+as $$
+  with me as (
+    select rating from public.player_ratings where user_id = auth.uid() limit 1
+  )
+  select
+    case when (select rating from me) is null then null
+         else (select count(*) + 1 from public.player_ratings
+                where rating > (select rating from me))::int end,
+    (select rating from me)::int,
+    (select count(*) from public.player_ratings)::int;
+$$;
+grant execute on function public.my_rank() to authenticated;
+
+-- ============================================================
+-- 15) Most-missed words across ALL players (admin analytics).
+-- ============================================================
+-- security_invoker = ON on purpose: RLS then scopes the rows to the
+-- caller, so the admin aggregates everyone while a normal player would
+-- only ever aggregate their own misses.
+create or replace view public.word_difficulty
+  with (security_invoker = on) as
+  select word,
+         bool_or(flies)          as flies,
+         sum(misses)::int        as total_misses,
+         count(distinct user_id)::int as players_missed
+  from public.word_misses
+  group by word
+  order by total_misses desc;
+
+revoke all on public.word_difficulty from anon, authenticated;
+grant select on public.word_difficulty to authenticated;

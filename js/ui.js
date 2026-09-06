@@ -17,7 +17,7 @@ export function init() {
     'score-pill', 'best-pill',
     'start-screen', 'gameover-screen', 'play-btn', 'replay-btn',
     'reveal-row', 'stat-survived', 'stat-avg', 'stat-fastest', 'new-best', 'home-btn',
-    'friends-btn', 'name-screen', 'name-input', 'name-ok-btn',
+    'friends-btn', 'name-screen', 'name-input', 'name-ok-btn', 'name-back-btn',
     'lobby-screen', 'lobby-panel', 'report-screen', 'report-panel',
     'players-strip', 'spectator-banner',
     'auth-row', 'leaderboard-btn', 'leaderboard-screen', 'leaderboard-panel',
@@ -400,7 +400,7 @@ export function setReportRatingLine(info) {
 }
 
 // The leaderboard overlay. `load(kind)` returns rows for a tab.
-export function showLeaderboard({ load, onBack, myName }) {
+export function showLeaderboard({ load, loadMyRank, onBack, myName }) {
   els.leaderboardPanel.innerHTML = `
     <h1 class="panel-title">🏆 Leaderboard</h1>
     <div class="lb-tabs">
@@ -408,29 +408,64 @@ export function showLeaderboard({ load, onBack, myName }) {
       <button class="lb-tab" data-kind="weekly">This Week</button>
       <button class="lb-tab" data-kind="fastest">Fastest</button>
     </div>
+    <div class="lb-head"><span class="lb-rank">#</span><span class="lb-name">Player</span><span class="lb-score" id="lb-metric">Rating</span></div>
     <div class="lb-list" id="lb-list"><p class="lb-empty">Loading…</p></div>
     <button class="btn-small" id="lb-back">Back</button>`;
   els.leaderboardScreen.classList.remove('hidden');
 
   const listEl = els.leaderboardPanel.querySelector('#lb-list');
+  const metricEl = els.leaderboardPanel.querySelector('#lb-metric');
+  const METRIC_LABEL = { rating: 'Rating', weekly: 'Best run', fastest: 'Fastest' };
+
+  const metricFor = (kind, r) =>
+    kind === 'fastest' ? `${r.best_ms} ms`
+      : kind === 'rating' ? `${r.rating}`
+      : `${r.best_words}`;
+
+  // Only ONE medal per row: the rank cell shows a medal for the top 3
+  // and a plain number after that. (The score column stays a number —
+  // tier emoji there produced a confusing second medal.)
+  const rankCell = (n) => ['🥇', '🥈', '🥉'][n - 1] || `${n}`;
+
+  const rowHtml = (r, rank, kind, isMe) => {
+    const av = r.avatar_url
+      ? `<img class="lb-av" src="${esc(r.avatar_url)}" alt="" referrerpolicy="no-referrer">`
+      : '<span class="lb-av ph">🙂</span>';
+    const tint = kind === 'rating' && r.rating != null
+      ? ` style="color:${tierFor(r.rating).color}"` : '';
+    return `<div class="lb-row${isMe ? ' me' : ''}">
+      <span class="lb-rank">${rankCell(rank)}</span>
+      ${av}<span class="lb-name">${esc(r.display_name)}</span>
+      <span class="lb-score"${tint}>${metricFor(kind, r)}</span>
+    </div>`;
+  };
+
   const render = async (kind) => {
+    metricEl.textContent = METRIC_LABEL[kind] || 'Score';
     listEl.innerHTML = '<p class="lb-empty">Loading…</p>';
-    const rows = await load(kind);
+    const [rows, mine] = await Promise.all([
+      load(kind),
+      kind === 'rating' && loadMyRank ? loadMyRank() : Promise.resolve(null),
+    ]);
     if (!rows.length) {
       listEl.innerHTML = '<p class="lb-empty">No scores yet — be the first! 🥇</p>';
       return;
     }
-    listEl.innerHTML = rows.map((r, i) => {
-      const metric = kind === 'fastest' ? `${r.best_ms} ms`
-        : kind === 'rating' ? `${tierFor(r.rating).emoji} ${r.rating}`
-        : `${r.best_words}`;
-      const medal = ['🥇', '🥈', '🥉'][i] || `#${i + 1}`;
-      const me = myName && r.display_name === myName ? ' me' : '';
-      const av = r.avatar_url
-        ? `<img class="lb-av" src="${esc(r.avatar_url)}" alt="" referrerpolicy="no-referrer">`
-        : '<span class="lb-av ph">🙂</span>';
-      return `<div class="lb-row${me}"><span class="lb-rank">${medal}</span>${av}<span class="lb-name">${esc(r.display_name)}</span><span class="lb-score">${metric}</span></div>`;
-    }).join('');
+    let html = rows
+      .map((r, i) => rowHtml(r, i + 1, kind, myName && r.display_name === myName))
+      .join('');
+
+    // Codeforces-style: if you're outside the visible list, your own row
+    // is still pinned at the bottom with your true rank.
+    const visible = myName && rows.some((r) => r.display_name === myName);
+    if (kind === 'rating' && mine?.rank && !visible) {
+      html += `<div class="lb-gap">⋯</div>` +
+        rowHtml({ display_name: myName, rating: mine.rating, avatar_url: null },
+          mine.rank, kind, true);
+    }
+    listEl.innerHTML = html;
+    // Bring the player's own row into view on open.
+    listEl.querySelector('.lb-row.me')?.scrollIntoView({ block: 'nearest' });
   };
 
   els.leaderboardPanel.querySelectorAll('.lb-tab').forEach((t) =>
@@ -541,7 +576,8 @@ const esc = (s) =>
   String(s).replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// Ask for a nickname; resolves with the trimmed name.
+// Ask for a nickname. Resolves with the trimmed name, or null if the
+// player backs out (every multiplayer step must have a way back).
 export function promptName() {
   hideScreens();
   els.nameScreen.classList.remove('hidden');
@@ -549,17 +585,27 @@ export function promptName() {
   els.nameInput.focus();
 
   return new Promise((resolve) => {
+    const cleanup = (value) => {
+      els.nameOkBtn.removeEventListener('click', submit);
+      els.nameBackBtn.removeEventListener('click', back);
+      els.nameInput.removeEventListener('keydown', onKey);
+      els.nameScreen.classList.add('hidden');
+      resolve(value);
+    };
     const submit = () => {
       const name = els.nameInput.value.trim().slice(0, 16);
       if (!name) { els.nameInput.focus(); return; }
       localStorage.setItem('flyer-name', name);
-      els.nameOkBtn.removeEventListener('click', submit);
-      els.nameInput.removeEventListener('keydown', onKey);
-      els.nameScreen.classList.add('hidden');
-      resolve(name);
+      cleanup(name);
     };
-    const onKey = (e) => { if (e.key === 'Enter') submit(); e.stopPropagation(); };
+    const back = () => cleanup(null);
+    const onKey = (e) => {
+      if (e.key === 'Enter') submit();
+      if (e.key === 'Escape') back();
+      e.stopPropagation();
+    };
     els.nameOkBtn.addEventListener('click', submit);
+    els.nameBackBtn.addEventListener('click', back);
     els.nameInput.addEventListener('keydown', onKey);
   });
 }
@@ -601,10 +647,12 @@ export function promptRoomChoice({ error = '' } = {}) {
   });
 }
 
-export function showLobby({ code, players, myId, maxPlayers, onStart, onLeave }) {
+export function showLobby({ code, players, myId, maxPlayers, minPlayers = 2, onStart, onLeave }) {
   hideScreens();
   const me = players.find((p) => p.id === myId);
   const isHost = !!me?.isHost;
+  // A group game needs a group — don't offer Start until someone joins.
+  const canStart = players.length >= minPlayers;
 
   els.lobbyPanel.innerHTML = `
     <h1 class="panel-title">🛖 Room</h1>
@@ -623,9 +671,12 @@ export function showLobby({ code, players, myId, maxPlayers, onStart, onLeave })
     </div>
     <p class="lobby-hint">${players.length}/${maxPlayers} players</p>
     ${isHost
-      ? '<button class="btn-big" id="lobby-start-btn">Start game</button>'
+      ? (canStart
+          ? '<button class="btn-big" id="lobby-start-btn">Start game</button>'
+          : `<button class="btn-big" id="lobby-start-btn" disabled>Start game</button>
+             <p class="lobby-hint">Waiting for a friend to join — share the code above 👆</p>`)
       : '<p class="lobby-hint">Waiting for the host to start…</p>'}
-    <p style="margin-top:12px"><button class="btn-small" id="lobby-leave-btn">Leave</button></p>
+    <p style="margin-top:12px"><button class="btn-small" id="lobby-leave-btn">Back</button></p>
   `;
   els.lobbyScreen.classList.remove('hidden');
 
@@ -640,6 +691,18 @@ export function showLobby({ code, players, myId, maxPlayers, onStart, onLeave })
   });
   document.getElementById('lobby-start-btn')?.addEventListener('click', onStart);
   document.getElementById('lobby-leave-btn').addEventListener('click', onLeave);
+}
+
+// Inline note inside the lobby (e.g. "you need one more player").
+export function showLobbyNote(message) {
+  const panel = els.lobbyPanel;
+  let note = panel.querySelector('.lobby-note');
+  if (!note) {
+    note = document.createElement('p');
+    note.className = 'mp-error lobby-note';
+    panel.appendChild(note);
+  }
+  note.textContent = message;
 }
 
 export function showMpError(message, { onBack } = {}) {

@@ -1031,13 +1031,39 @@ body {
 
 .lb-tab.active { background: #ffe9b3; border-color: var(--ink); }
 
+/* Column header, aligned with the rows below it. */
+.lb-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.55;
+}
+
+/* The list scrolls on its own so long boards stay usable on phones,
+   while the panel around it keeps the tabs and Back button in view. */
 .lb-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 46vh;
+  max-height: min(52vh, 420px);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   margin-bottom: 18px;
+  padding-right: 2px;
+}
+
+/* Separator before the pinned "your rank" row. */
+.lb-gap {
+  text-align: center;
+  opacity: 0.4;
+  font-weight: 700;
+  letter-spacing: 3px;
+  line-height: 1;
 }
 
 .lb-row {
@@ -1054,11 +1080,16 @@ body {
 .lb-row.me { background: #ffe9b3; box-shadow: 0 0 0 2px var(--ink) inset; }
 
 .lb-rank {
-  width: 32px;
+  width: 34px;
+  flex: 0 0 34px;
   text-align: center;
   font-weight: 700;
   font-size: 0.95rem;
 }
+
+/* Header has no avatar, so keep its Player label aligned with the rows. */
+.lb-head .lb-name { margin-left: 38px; }
+.lb-head .lb-score { text-align: right; }
 
 .lb-av {
   width: 28px;

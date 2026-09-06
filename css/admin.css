@@ -148,6 +148,88 @@
 .word-del { background: #f0605a; }
 .word-flip { background: #4db3f0; }
 
+/* ---------------- Toolbar / search ---------------- */
+
+.admin-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.admin-toolbar .admin-input { flex: 1 1 220px; min-width: 0; }
+.admin-note .ok, .admin-sub .ok { color: #2e9e50; }
+.admin-note .warn, .admin-sub .warn { color: #c07000; }
+
+/* Anything long scrolls in its own box instead of running off-screen. */
+.admin-scroll {
+  max-height: 60vh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
+}
+.admin-scroll.short { max-height: 320px; }
+.admin-scroll.tall { max-height: 46vh; align-content: flex-start; }
+
+/* Keep table headers visible while scrolling. */
+.admin-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f4eede;
+  z-index: 1;
+}
+
+.admin-table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.admin-table th.sortable:hover { opacity: 0.9; }
+.admin-table th.sorted { opacity: 1; color: var(--accent); }
+.admin-table td.dim { opacity: 0.7; font-weight: 500; }
+.p-row { cursor: pointer; }
+.p-row:hover td { background: #fff6e2; }
+
+/* ---------------- Player detail ---------------- */
+
+.detail-card {
+  margin-top: 18px;
+  background: #fffdf7;
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+  padding: 16px;
+}
+.detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.detail-name { font-size: 1.2rem; font-weight: 700; }
+.admin-h3 .up { color: #2e9e50; }
+.admin-h3 .down { color: var(--bad); }
+
+.spark-wrap { margin-bottom: 8px; }
+.spark {
+  width: 100%;
+  height: 90px;
+  background: #f4eede;
+  border-radius: 12px;
+  display: block;
+}
+.spark-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  opacity: 0.6;
+  margin-top: 4px;
+}
+
+.word-chip.w-fly { background: #dff0ff; }
+.word-chip.w-sit { background: #f6e7d3; }
+.tricky-n { font-size: 0.72rem; opacity: 0.65; }
+
 @media (max-width: 560px) {
   .words-cols { grid-template-columns: 1fr; }
+  .admin-content { padding: 8px 12px 40px; }
+  .admin-table { font-size: 0.82rem; }
+  .admin-table td, .admin-table th { padding: 7px 6px; }
 }

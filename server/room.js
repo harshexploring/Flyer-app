@@ -15,6 +15,7 @@
 
 export const GAME_CONFIG = {
   maxPlayers: 5,
+  minPlayersToStart: 2, // a group game needs a group (no solo wins/Crowns)
   startingLives: 3,    // mistakes each player is allowed before elimination
   startWindowMs: 2000, // answer window for the first word
   shrinkPerWordMs: 50, // window shrinks this much every word
@@ -74,6 +75,7 @@ export class Room {
       code: this.code,
       players: this.publicPlayers(),
       maxPlayers: GAME_CONFIG.maxPlayers,
+      minPlayers: GAME_CONFIG.minPlayersToStart,
     });
   }
 
@@ -143,6 +145,15 @@ export class Room {
   start(byId) {
     const starter = this.players.get(byId);
     if (this.phase === 'playing' || !starter?.isHost) return;
+
+    // A "group game" needs an actual group. Playing alone in a room
+    // would otherwise hand out a free win (and a Crown) for nothing.
+    if (this.connectedPlayers.length < GAME_CONFIG.minPlayersToStart) {
+      starter.socket.emit('start:refused', {
+        reason: 'You need at least one more player to start a group game. Share the room code!',
+      });
+      return;
+    }
 
     // Drop stale records from previous games, reset per-game stats.
     for (const [id, p] of this.players) {

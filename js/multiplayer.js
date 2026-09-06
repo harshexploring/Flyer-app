@@ -77,6 +77,11 @@ function renderLobby() {
 export async function startMultiplayer() {
   active = true;
   const name = await ui.promptName();
+  if (name === null) { // backed out of the name step
+    active = false;
+    ui.showStartScreen();
+    return;
+  }
 
   try {
     await ensureIoScript();
@@ -193,6 +198,11 @@ function bindEvents() {
 
   socket.on('player:left', ({ id }) => {
     ui.markPlayerLeft(id);
+  });
+
+  // Host tried to start a group game alone.
+  socket.on('start:refused', ({ reason }) => {
+    ui.showLobbyNote(reason);
   });
 
   socket.on('game:over', ({ report, winnerIds }) => {

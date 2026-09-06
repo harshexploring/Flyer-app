@@ -67,7 +67,7 @@ io.on('connection', (socket) => {
     rooms.set(code, room);
     room.addPlayer(socket, name);
     joinedCode = code;
-    ack?.({ ok: true, code, players: room.publicPlayers(), maxPlayers: GAME_CONFIG.maxPlayers });
+    ack?.({ ok: true, code, players: room.publicPlayers(), maxPlayers: GAME_CONFIG.maxPlayers, minPlayers: GAME_CONFIG.minPlayersToStart });
   });
 
   socket.on('room:join', ({ code, name } = {}, ack) => {
@@ -83,7 +83,7 @@ io.on('connection', (socket) => {
     }
     room.addPlayer(socket, name);
     joinedCode = room.code;
-    ack?.({ ok: true, code: room.code, players: room.publicPlayers(), maxPlayers: GAME_CONFIG.maxPlayers });
+    ack?.({ ok: true, code: room.code, players: room.publicPlayers(), maxPlayers: GAME_CONFIG.maxPlayers, minPlayers: GAME_CONFIG.minPlayersToStart });
   });
 
   socket.on('game:start', () => {

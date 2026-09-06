@@ -145,6 +145,28 @@ solo refreshed, so group play appeared to do nothing).
 A leaderboard rank barely moves and tells the player nothing about their own
 progress; the delta does.
 
+**Reaction times are clamped, never rejected.** `saveGame()` clamps ms into
+40–60000 before inserting. The DB keeps a matching CHECK as a backstop. This
+replaced a 120 ms floor that rejected the *whole game row* whenever someone
+reacted faster than 120 ms — i.e. the better a player did, the more likely
+their run was silently lost ("Couldn't save this run").
+
+**Leaderboard** (`Rating` / `This Week` / `Fastest`) shows a rank column,
+one medal per row (🥇🥈🥉 for the top three, plain numbers after), and — like
+Codeforces — pins **your own row at the bottom with your true rank** when
+you're outside the visible list, via the `my_rank()` RPC (an RPC so player
+ids are never exposed in a public view). The list scrolls independently so
+long boards stay usable on phones.
+
+**Group games need a group.** `GAME_CONFIG.minPlayersToStart` (2) stops a
+host starting a room alone — otherwise they'd collect a free win and Crown.
+The lobby disables Start until someone joins, and the server refuses it
+regardless (`start:refused`).
+
+**Every multiplayer step has a way back** — the name prompt, the create/join
+chooser, and the lobby all offer Back, so a player who meant to play solo is
+never trapped.
+
 **Data protection:** Row-Level Security means a user can only read/write
 their own rows; leaderboards are public views exposing only name + avatar +
 score/rating (never email/phone). Impossible reaction times (<120 ms) are
@@ -171,10 +193,24 @@ One person — identified by their Google email in the `admins` table — can
 open `/admin.html`. Access is enforced by the `is_admin()` database
 function and RLS (a non-admin gets no data even if they load the page).
 Tabs:
-- **Players** — everyone onboarded, their games played, best, join/last-played dates.
-- **Aggregates** — total players/games, avg accuracy, and a reaction-time distribution chart.
-- **Feedback** — every ⭐ rating + comment players have left.
-- **Words** — add (`Add word`), move between the fly/sit lists (`⇄`), and delete (`×`) — full CRUD on the `words` table.
+- **Players** — searchable (name/email) and sortable on every column: rating,
+  games, crowns, best run, avg ms, games-per-active-day, last played. Click a
+  row for a drill-down: their most-missed words, activity, and a **rating
+  history sparkline** (rating recomputed after each of their games).
+- **Aggregates** — players, active-in-7-days, games, group games, accuracy,
+  average rating, average feedback stars; games-per-day for the last 14 days;
+  reaction-time distribution; **hardest words across all players**; and a
+  top-10 rating table.
+- **Feedback** — every ⭐ rating + comment, with count and average.
+- **Words** — search (tells you whether a word already exists), add, move
+  between the fly/sit lists (`⇄`), and delete (`×`) — full CRUD. Both lists
+  scroll independently so long lists stay usable.
+
+Tables scroll with sticky headers, and the whole dashboard is responsive.
+Player ratings are computed in the browser from raw games (same formula as
+`js/rating.js`) so the `player_ratings` view never has to expose user ids.
+The dashboard degrades gracefully if the newest `schema.sql` hasn't been run
+(missing `profiles.email` / `word_difficulty` are handled, not fatal).
 
 The admin signs in with the same Google button; since the session is shared
 across the same origin, signing in on the main site also unlocks
@@ -282,6 +318,9 @@ RLS). Deployed as one Render Web Service (`render.yaml`).
 - [x] Player feedback (⭐ + comment)
 - [x] Crowns 👑 (group games won) + a bigger rating boost for winning
 - [x] Rating change (▲/▼) after every game instead of a rank
+- [x] Leaderboard ranks + your own row pinned (Codeforces-style)
+- [x] Admin search / sort / drill-down + deeper analytics
+- [x] Group games require 2+ players
 - [ ] Friends / private-group leaderboards
 - [ ] Profile progress graph + achievements/badges
 - [ ] "Practice your tricky words" mode

@@ -108,6 +108,14 @@ export async function signOut() {
 
 // ---------------- Data ----------------
 
+// The DB rejects out-of-range reaction times. Clamp here so an
+// exceptionally fast round can never cost the player their whole run —
+// losing a good game is far worse than storing a slightly clipped ms.
+const MIN_MS = 40;
+const MAX_MS = 60000;
+const clampMs = (v) =>
+  v == null || !Number.isFinite(v) ? null : Math.min(MAX_MS, Math.max(MIN_MS, Math.round(v)));
+
 // Save one finished game. No-op for guests. Returns the row or null.
 export async function saveGame({ mode, wordsSurvived, bestMs, avgMs, correct, mistakes, won }) {
   const c = await getClient();
@@ -117,11 +125,11 @@ export async function saveGame({ mode, wordsSurvived, bestMs, avgMs, correct, mi
     .insert({
       user_id: currentUser.id,
       mode,
-      words_survived: wordsSurvived,
-      best_ms: bestMs ?? null,
-      avg_ms: avgMs ?? null,
-      correct: correct ?? 0,
-      mistakes: mistakes ?? 0,
+      words_survived: Math.max(0, Math.min(1000, Math.round(wordsSurvived || 0))),
+      best_ms: clampMs(bestMs),
+      avg_ms: clampMs(avgMs),
+      correct: Math.max(0, Math.round(correct || 0)),
+      mistakes: Math.max(0, Math.round(mistakes || 0)),
       won: !!won,
     })
     .select()
@@ -142,6 +150,17 @@ export async function getLeaderboard(kind = 'rating') {
   const { data, error } = await c.from(VIEWS[kind] || VIEWS.rating).select('*');
   if (error) { console.warn('leaderboard failed:', error.message); return []; }
   return data || [];
+}
+
+// The signed-in player's own rank on the rating board. Uses an RPC so
+// player ids are never exposed in the public leaderboard views.
+export async function getMyRank() {
+  const c = await getClient();
+  if (!c || !currentUser) return null;
+  const { data, error } = await c.rpc('my_rank');
+  if (error) { console.warn('my_rank failed:', error.message); return null; }
+  const row = Array.isArray(data) ? data[0] : data;
+  return row?.rank ? row : null;
 }
 
 // Leave feedback (⭐ 1-5 + optional comment). Works for signed-in users.
